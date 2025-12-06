@@ -238,13 +238,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📧 Contact
 
-**Your Name** - [@your_twitter](https://twitter.com/your_twitter)
-
-**Project Link**: [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME)
-
----
 
 <div align="center">
 
