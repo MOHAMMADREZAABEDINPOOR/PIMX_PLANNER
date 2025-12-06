@@ -1,0 +1,7 @@
+name = "pimx-planner-api"
+compatibility_date = "2025-12-06"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "planner"
+database_id = "a332eef3-dd93-4fc1-8ae9-683f8d4b25ed"
