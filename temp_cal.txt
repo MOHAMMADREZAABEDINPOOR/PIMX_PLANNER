@@ -1,0 +1,652 @@
+1	import React, { useEffect, useMemo, useState } from 'react';
+2	import { storage, getPersianMonthDays, toISODate } from '../utils';
+3	import { DailyPlan, VideoLog, GradeEntry, Goal } from '../types';
+4	import {
+5	  ArrowRight,
+6	  ArrowLeft,
+7	  CheckCircle2,
+8	  Play,
+9	  Award,
+10	  Calendar,
+11	  BarChart2,
+12	  Target,
+13	  Sparkles,
+14	  Activity,
+15	  Flame
+16	} from 'lucide-react';
+17	
+18	type DaySnapshot = {
+19	  date: Date;
+20	  plan?: DailyPlan;
+21	  videoCount: number;
+22	  gradeCount: number;
+23	  goalCount: number;
+24	  goals: Goal[];
+25	  videos?: VideoLog[];
+26	  grades?: GradeEntry[];
+27	};
+28	
+29	type TimelineTone = 'emerald' | 'cyan' | 'amber' | 'pink' | 'slate';
+30	
+31	export const CalendarSection: React.FC = () => {
+32	  const [viewDate, setViewDate] = useState<Date>(new Date());
+33	  const [calendarData, setCalendarData] = useState<{ days: any[]; currentMonth: number; currentYear: number }>(
+34	    () => getPersianMonthDays(new Date())
+35	  );
+36	  const [plans, setPlans] = useState<Record<string, DailyPlan>>({});
+37	  const [videoLogs, setVideoLogs] = useState<VideoLog[]>([]);
+38	  const [grades, setGrades] = useState<GradeEntry[]>([]);
+39	  const [goals, setGoals] = useState<Goal[]>([]);
+40	  const [selectedDayStats, setSelectedDayStats] = useState<DaySnapshot | null>(null);
+41	
+42	  useEffect(() => {
+43	    setPlans(storage.get(storage.keys.DAILY_PLANS, {}));
+44	    setVideoLogs(storage.get(storage.keys.VIDEO_LOGS, []));
+45	    setGrades(storage.get(storage.keys.GRADES, []));
+46	    setGoals(storage.get(storage.keys.GOALS, []));
+47	  }, []);
+48	
+49	  useEffect(() => {
+50	    setCalendarData(getPersianMonthDays(viewDate));
+51	  }, [viewDate]);
+52	
+53	  const changeMonth = (offset: number) => {
+54	    const newDate = new Date(viewDate);
+55	    newDate.setMonth(newDate.getMonth() + offset);
+56	    setViewDate(newDate);
+57	    setSelectedDayStats(null);
+58	  };
+59	
+60	  const safeIsoFromString = (value?: string | null) => {
+61	    if (!value) return null;
+62	    const d = new Date(value);
+63	    return Number.isNaN(d.getTime()) ? null : toISODate(d);
+64	  };
+65	
+66	  const normalizePlan = (plan?: DailyPlan) => {
+67	    if (!plan) return undefined;
+68	    return {
+69	      ...plan,
+70	      habits: Array.isArray(plan.habits) ? plan.habits : [],
+71	      tasks: Array.isArray(plan.tasks) ? plan.tasks : []
+72	    };
+73	  };
+74	
+75	  const getDayStats = (date: Date) => {
+76	    const iso = toISODate(date);
+77	    const plan = normalizePlan(plans[iso]);
+78	    const videos = videoLogs.filter(v => v.date === iso);
+79	    const daysGrades = grades.filter(g => g.date === iso);
+80	    const dayGoals = goals.filter(g => {
+81	      const completedIso = g.completed ? safeIsoFromString(g.completedAt) : null;
+82	      return g.completed && completedIso === iso;
+83	    });
+84	
+85	    let score = 0;
+86	    if (plan) {
+87	      const habitImpact = 5;
+88	      const totalHabits = plan.habits.length;
+89	      const totalTaskImpact = plan.tasks.reduce((sum, t) => sum + (Number.isFinite(t.impactScore) ? t.impactScore : 0), 0);
+90	      const totalScore = totalHabits * habitImpact + totalTaskImpact;
+91	      const earnedScore =
+92	        plan.habits.filter(h => h.completed).length * habitImpact +
+93	        plan.tasks.reduce((sum, t) => (t.completed ? sum + (Number.isFinite(t.impactScore) ? t.impactScore : 0) : sum), 0);
+94	      score = totalScore === 0 ? 0 : Math.round((earnedScore / totalScore) * 100);
+95	    }
+96	
+97	    return { score, plan, videos, daysGrades, dayGoals };
+98	  };
+99	
+100	  const handleDayClick = (date: Date) => {
+101	    const { plan, videos, daysGrades, dayGoals } = getDayStats(date);
+102	    setSelectedDayStats({
+103	      date,
+104	      plan,
+105	      videoCount: videos.reduce((acc, v) => acc + (Number.isFinite(v.count) ? v.count : 0), 0),
+106	      gradeCount: daysGrades.length,
+107	      goalCount: dayGoals.length,
+108	      goals: dayGoals,
+109	      videos,
+110	      grades: daysGrades
+111	    });
+112	  };
+113	
+114	  const shiftSelectedDay = (offset: number) => {
+115	    const baseDate = selectedDayStats?.date || viewDate;
+116	    const nextDate = new Date(baseDate);
+117	    nextDate.setDate(baseDate.getDate() + offset);
+118	    setViewDate(nextDate);
+119	    handleDayClick(nextDate);
+120	  };
+121	
+122	  const weekDays = ['?', '?', '?', '?', '?', '?', '?'];
+123	  const monthName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long', year: 'numeric' }).format(viewDate);
+124	
+125	  const monthlyHighlights = useMemo(() => {
+126	    const monthDays = calendarData.days.filter(d => d.isCurrentMonth);
+127	
+128	    let totalScore = 0;
+129	    let scoreDays = 0;
+130	    let videoTotal = 0;
+131	    let gradeTotal = 0;
+132	    let goalTotal = 0;
+133	
+134	    monthDays.forEach(day => {
+135	      const { score, videos, daysGrades, dayGoals } = getDayStats(day.date);
+136	      if (score > 0) {
+137	        totalScore += score;
+138	        scoreDays += 1;
+139	      }
+140	      videoTotal += videos.reduce((acc, v) => acc + v.count, 0);
+141	      gradeTotal += daysGrades.length;
+142	      goalTotal += dayGoals.length;
+143	    });
+144	
+145	    return {
+146	      efficiency: Math.round(totalScore / (scoreDays || 1)),
+147	      videoTotal,
+148	      gradeTotal,
+149	      goalTotal
+150	    };
+151	  }, [calendarData, plans, videoLogs, grades, goals]);
+152	
+153	  const heatDays = calendarData.days.filter(d => d.isCurrentMonth);
+154	  const visibleCalendarDays = useMemo(() => {
+155	    const days = calendarData.days;
+156	    const firstIdx = days.findIndex(d => d.isCurrentMonth);
+157	    const lastIdx = [...days].reverse().findIndex(d => d.isCurrentMonth);
+158	    if (firstIdx === -1 || lastIdx === -1) return days;
+159	    const lastActualIdx = days.length - 1 - lastIdx;
+160	    const startRow = Math.floor(firstIdx / 7);
+161	    const endRow = Math.floor(lastActualIdx / 7);
+162	    return days.slice(startRow * 7, (endRow + 1) * 7);
+163	  }, [calendarData]);
+164	  const selectedEfficiency = selectedDayStats ? getDayStats(selectedDayStats.date).score : monthlyHighlights.efficiency;
+165	  const activeDate = selectedDayStats?.date || viewDate;
+166	  const activeDateLabel = useMemo(
+167	    () => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long', year: 'numeric' }).format(activeDate),
+168	    [activeDate]
+169	  );
+170	  const activeDayNumber = useMemo(() => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(activeDate), [activeDate]);
+171	  const activeMonthLabel = useMemo(
+172	    () => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long', year: 'numeric' }).format(activeDate),
+173	    [activeDate]
+174	  );
+175	  const activeWeekday = useMemo(() => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long' }).format(activeDate), [activeDate]);
+176	
+177	  const timelineEvents = useMemo(() => {
+178	    if (!selectedDayStats) return [];
+179	    const events: { id: string; title: string; hint?: string; tone: TimelineTone; icon: React.ReactElement }[] = [];
+180	
+181	    selectedDayStats.plan?.tasks.forEach(t => {
+182	      events.push({
+183	        id: `task-${t.id}`,
+184	        title: `???: ${t.title}`,
+185	        hint: t.completed ? '???? ??' : `?? ????? | ?????? ${t.impactScore}`,
+186	        tone: t.completed ? 'emerald' : 'amber',
+187	        icon: <CheckCircle2 className={t.completed ? 'text-emerald-300' : 'text-amber-300'} />
+188	      });
+189	    });
+190	
+191	    selectedDayStats.plan?.habits.forEach(h => {
+192	      events.push({
+193	        id: `habit-${h.id}`,
+194	        title: `????: ${h.title}`,
+195	        hint: h.completed ? '????? ??' : '?? ??????',
+196	        tone: h.completed ? 'emerald' : 'slate',
+197	        icon: <Activity className={h.completed ? 'text-emerald-300' : 'text-slate-300'} />
+198	      });
+199	    });
+200	
+201	    (selectedDayStats.videos || []).forEach((v, idx) => {
+202	      events.push({
+203	        id: `video-${v.id || idx}`,
+204	        title: `${v.count} ?????`,
+205	        hint: `${v.subject}`,
+206	        tone: 'cyan',
+207	        icon: <Play className="text-cyan-300 fill-cyan-300/30" />
+208	      });
+209	    });
+210	
+211	    (selectedDayStats.grades || []).forEach((g, idx) => {
+212	      events.push({
+213	        id: `grade-${g.id || idx}`,
+214	        title: `???? ${g.score}/20`,
+215	        hint: `${g.subject}`,
+216	        tone: 'pink',
+217	        icon: <Award className="text-pink-300" />
+218	      });
+219	    });
+220	
+221	    selectedDayStats.goals.forEach((g, idx) => {
+222	      events.push({
+223	        id: `goal-${g.id || idx}`,
+224	        title: `???: ${g.text}`,
+225	        hint: '????? ???',
+226	        tone: 'emerald',
+227	        icon: <Target className="text-emerald-300" />
+228	      });
+229	    });
+230	
+231	    return events.slice(0, 12);
+232	  }, [selectedDayStats]);
+233	  const dayPlan = selectedDayStats?.plan;
+234	  const planTasks = dayPlan?.tasks || [];
+235	  const planHabits = dayPlan?.habits || [];
+236	
+237	  const toneStyles: Record<TimelineTone, string> = {
+238	    emerald: 'border-emerald-400/30 bg-emerald-500/5 text-emerald-50',
+239	    cyan: 'border-cyan-400/30 bg-cyan-500/5 text-cyan-50',
+240	    amber: 'border-amber-400/30 bg-amber-500/5 text-amber-50',
+241	    pink: 'border-pink-400/30 bg-pink-500/5 text-pink-50',
+242	    slate: 'border-white/10 bg-white/5 text-slate-100'
+243	  };
+244	
+245	  return (
+246	    <div className="space-y-7 animate-enter" dir="rtl">
+247	      <div className="relative overflow-hidden rounded-[30px] border border-emerald-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 md:p-8 shadow-[0_20px_60px_-30px_rgba(16,185,129,0.9)]">
+248	        <div className="absolute inset-0 pointer-events-none opacity-70">
+249	          <div className="absolute -left-24 -top-24 w-64 h-64 bg-emerald-500/15 rounded-full blur-[120px] animate-pulse"></div>
+250	          <div className="absolute right-10 -bottom-20 w-72 h-72 bg-cyan-500/15 rounded-full blur-[130px] animate-float"></div>
+251	          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_40%,rgba(34,211,238,0.08),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(16,185,129,0.08),transparent_30%)]"></div>
+252	        </div>
+253	
+254	        <div className="relative flex flex-col xl:flex-row gap-6 items-start xl:items-center">
+255	          <div className="space-y-4 flex-1">
+256	            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-emerald-400/20 text-emerald-100 text-xs tracking-wide">
+257	              <Sparkles className="w-4 h-4 text-emerald-300" />
+258	              <span>????? ????? | Time Capsule</span>
+259	            </div>
+260	
+261	            <div className="flex flex-col gap-2 text-white">
+262	              <div className="flex items-center gap-3">
+263	                <Calendar className="w-8 h-8 text-emerald-300" />
+264	                <h2 className="text-3xl md:text-4xl font-black tracking-tight">???? ??? ?? ?? ?? ???? ??? ???</h2>
+265	              </div>
+266	              <p className="text-sm md:text-base text-slate-200/70 leading-relaxed max-w-3xl">
+267	                ????? ?????? ???????? ??????? ? ????? ?? ??? ??? ?? ????????? ?????. ??? ?????? ?????? ?? ? ???? ????? ????? ???????.
+268	              </p>
+269	            </div>
+270	
+271	            <div className="flex items-center gap-3">
+272	              <button
+273	                onClick={() => changeMonth(1)}
+274	                className="p-3 rounded-2xl border border-white/10 bg-white/5 text-slate-200 hover:text-emerald-200 hover:-translate-y-0.5 transition-all shadow-[0_10px_40px_-20px_rgba(0,0,0,0.6)]"
+275	              >
+276	                <ArrowRight />
+277	              </button>
+278	              <div className="px-5 py-3 rounded-2xl border border-emerald-400/20 bg-white/5 text-2xl font-black text-white backdrop-blur shadow-[0_10px_30px_-15px_rgba(16,185,129,0.6)]">
+279	                {monthName}
+280	              </div>
+281	              <button
+282	                onClick={() => changeMonth(-1)}
+283	                className="p-3 rounded-2xl border border-white/10 bg-white/5 text-slate-200 hover:text-emerald-200 hover:-translate-y-0.5 transition-all shadow-[0_10px_40px_-20px_rgba(0,0,0,0.6)]"
+284	              >
+285	                <ArrowLeft />
+286	              </button>
+287	            </div>
+288	
+289	            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+290	              <div className="rounded-2xl border border-emerald-400/20 bg-white/5 p-4 shadow-[0_12px_40px_-24px_rgba(16,185,129,0.8)]">
+291	                <div className="text-xs text-slate-300 flex items-center gap-2 mb-2">
+292	                  <Activity className="w-4 h-4 text-emerald-300" />
+293	                  ??????? ???
+294	                </div>
+295	                <div className="text-2xl font-black text-white">{monthlyHighlights.efficiency}%</div>
+296	                <div className="h-1.5 mt-3 rounded-full bg-white/10 overflow-hidden">
+297	                  <div
+298	                    className="h-full bg-gradient-to-r from-emerald-400 via-cyan-300 to-emerald-500"
+299	                    style={{ width: `${monthlyHighlights.efficiency}%` }}
+300	                  ></div>
+301	                </div>
+302	              </div>
+303	              <div className="rounded-2xl border border-cyan-400/20 bg-white/5 p-4">
+304	                <div className="text-xs text-slate-300 flex items-center gap-2 mb-2">
+305	                  <Play className="w-4 h-4 text-cyan-300" />
+306	                  ?????
+307	                </div>
+308	                <div className="text-2xl font-black text-white">{monthlyHighlights.videoTotal}</div>
+309	                <p className="text-[11px] text-slate-400">?? ???????? ???????</p>
+310	              </div>
+311	              <div className="rounded-2xl border border-pink-400/20 bg-white/5 p-4">
+312	                <div className="text-xs text-slate-300 flex items-center gap-2 mb-2">
+313	                  <Award className="w-4 h-4 text-pink-300" />
+314	                  ???????
+315	                </div>
+316	                <div className="text-2xl font-black text-white">{monthlyHighlights.gradeTotal}</div>
+317	                <p className="text-[11px] text-slate-400">????? ????? ???? ???</p>
+318	              </div>
+319	              <div className="rounded-2xl border border-emerald-400/20 bg-white/5 p-4">
+320	                <div className="text-xs text-slate-300 flex items-center gap-2 mb-2">
+321	                  <Target className="w-4 h-4 text-emerald-300" />
+322	                  ?????
+323	                </div>
+324	                <div className="text-2xl font-black text-white">{monthlyHighlights.goalTotal}</div>
+325	                <p className="text-[11px] text-slate-400">????? ????????</p>
+326	              </div>
+327	            </div>
+328	          </div>
+329	
+330	          <div className="w-full xl:w-96 space-y-3">
+331	            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+332	              <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+333	                <span>???? ???</span>
+334	                <span>{heatDays.length} ???</span>
+335	              </div>
+336	              <div className="flex items-end gap-1 h-16">
+337	                {heatDays.map((day, idx) => {
+338	                  const { score } = getDayStats(day.date);
+339	                  const height = Math.max(12, Math.min(64, (score / 100) * 64));
+340	                  return (
+341	                    <div key={idx} className="flex-1">
+342	                      <div
+343	                        className="w-full rounded-full bg-slate-800/60 overflow-hidden shadow-[0_6px_20px_-12px_rgba(34,211,238,0.6)] transition-all duration-300"
+344	                        style={{
+345	                          height,
+346	                          background:
+347	                            score > 0
+348	                              ? 'linear-gradient(180deg, rgba(34,211,238,0.7) 0%, rgba(16,185,129,0.4) 60%, rgba(15,23,42,0.8) 100%)'
+349	                              : 'rgba(255,255,255,0.05)'
+350	                        }}
+351	                      ></div>
+352	                    </div>
+353	                  );
+354	                })}
+355	              </div>
+356	              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+357	                <span>????</span>
+358	                <span>?????</span>
+359	              </div>
+360	            </div>
+361	            <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 text-emerald-50 px-4 py-3 text-sm shadow-[0_15px_35px_-28px_rgba(16,185,129,0.8)]">
+362	              <div className="flex items-center gap-2">
+363	                <Flame className="w-4 h-4" />
+364	                <span>?????? ?????? ?? ????? ??? ?? ????? ????? ??? ???? ?????.</span>
+365	              </div>
+366	            </div>
+367	          </div>
+368	        </div>
+369	      </div>
+370	
+371	      <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_1fr] gap-6 items-start">
+372	        <div className="flex flex-col gap-6">
+373	          <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur min-h-[520px] max-h-[520px] flex flex-col">
+374	          <div className="absolute inset-0 opacity-60 pointer-events-none">
+375	            <div className="absolute -left-16 top-10 w-44 h-44 bg-cyan-500/10 rounded-full blur-[100px] animate-pulse"></div>
+376	            <div className="absolute right-0 -bottom-10 w-56 h-56 bg-purple-500/10 rounded-full blur-[120px] animate-float"></div>
+377	          </div>
+378	          <div className="relative space-y-4 flex-1 flex flex-col">
+379	            <div className="grid grid-cols-7 gap-2 text-center text-[12px] font-bold text-cyan-200/80 uppercase">
+380	              {weekDays.map(d => (
+381	                <div key={d}>{d}</div>
+382	              ))}
+383	            </div>
+384	
+385	            <div className="grid grid-cols-7 gap-2 sm:gap-3">
+386	              {visibleCalendarDays.map((day, idx) => {
+387	                const { score, videos, daysGrades, dayGoals } = getDayStats(day.date);
+388	                const isToday = toISODate(new Date()) === toISODate(day.date);
+389	                const isSelected = selectedDayStats && toISODate(selectedDayStats.date) === toISODate(day.date);
+390	
+391	                const glow =
+392	                  score >= 80 ? 'from-emerald-400/30 to-cyan-400/10' : score >= 50 ? 'from-amber-400/25 to-cyan-400/10' : 'from-slate-700/40 to-slate-800/40';
+393	
+394	                return (
+395	                  <div
+396	                    key={idx}
+397	                    onClick={() => handleDayClick(day.date)}
+398	                    className={`relative aspect-square rounded-2xl cursor-pointer transition-all duration-300 group overflow-hidden border ${
+399	                      isSelected
+400	                        ? 'border-emerald-400/50 shadow-[0_0_35px_-12px_rgba(16,185,129,0.8)] scale-105'
+401	                        : 'border-white/10 hover:border-emerald-300/30 hover:scale-105'
+402	                    } ${!day.isCurrentMonth ? 'opacity-40' : 'opacity-100'} ${isToday ? 'ring-2 ring-cyan-400/70 ring-offset-[3px] ring-offset-slate-900' : ''}`}
+403	                    style={{
+404	                      background: `linear-gradient(145deg, rgba(15,23,42,0.8) 0%, rgba(15,23,42,0.6) 50%, rgba(15,23,42,0.9) 100%)`
+405	                    }}
+406	                  >
+407	                    <div className={`absolute inset-0 bg-gradient-to-br ${glow} opacity-0 group-hover:opacity-80 transition-opacity duration-500`}></div>
+408	                    {score > 0 && (
+409	                      <div
+410	                        className="absolute inset-1 rounded-[14px] opacity-80"
+411	                        style={{
+412	                          background: `conic-gradient(from 90deg, rgba(34,211,238,0.35) ${score}%, rgba(148,163,184,0.2) ${score}% 100%)`
+413	                        }}
+414	                      ></div>
+415	                    )}
+416	                    <div className="relative z-10 h-full w-full flex flex-col items-center justify-between p-2">
+417	                      <div className="w-full flex items-center justify-between text-[11px] text-slate-400">
+418	                        {isToday ? <span className="text-cyan-200 font-semibold">?????</span> : <span className="opacity-70">???</span>}
+419	                        <span className="font-mono text-[10px] text-slate-500">{score ? `${score}%` : ''}</span>
+420	                      </div>
+421	
+422	                      <div className="flex-1 flex items-center justify-center">
+423	                        <div className="relative w-12 h-12 rounded-2xl border border-white/10 bg-slate-900/60 flex items-center justify-center text-white font-black text-lg shadow-inner">
+424	                          {day.dayNum}
+425	                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-6 rounded-full blur-sm bg-white/20"></div>
+426	                        </div>
+427	                      </div>
+428	
+429	                      <div className="w-full flex items-center justify-between text-[10px] text-slate-400">
+430	                        <div className="flex items-center gap-1">
+431	                          {videos.length > 0 && <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>}
+432	                          {daysGrades.length > 0 && <span className="w-2 h-2 rounded-full bg-pink-400 shadow-[0_0_8px_#f472b6]"></span>}
+433	                          {dayGoals.length > 0 && <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]"></span>}
+434	                        </div>
+435	                        <span className="text-right text-slate-500">{day.isCurrentMonth ? '' : '??? ???/???'}</span>
+436	                      </div>
+437	                    </div>
+438	                  </div>
+439	                );
+440	              })}
+441	            </div>
+442	          </div>
+443	        </div>
+444	
+445	        <div className="flex flex-col gap-4 h-full">
+446	          <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 md:p-6 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.8)] min-h-[520px] max-h-[520px]">
+447	            <div className="absolute inset-0 pointer-events-none opacity-60">
+448	              <div className="absolute -right-10 -top-10 w-32 h-32 bg-emerald-500/15 rounded-full blur-[80px]"></div>
+449	              <div className="absolute left-6 bottom-0 w-40 h-40 bg-cyan-500/12 rounded-full blur-[100px]"></div>
+450	            </div>
+451	
+452	            <div className="relative flex flex-col gap-4 h-full">
+453	              <div className="flex items-center justify-between">
+454	                <div className="flex items-center gap-2 text-white">
+455	                  <BarChart2 className="w-5 h-5 text-emerald-300" />
+456	                  <h3 className="text-lg font-black">?????? ???</h3>
+457	                </div>
+458	                <div className="text-xs text-slate-400">{selectedDayStats ? '?????? ??? ???????' : '?? ??? ?? ?? ????? ??? ??'}</div>
+459	              </div>
+460	
+461	              <div className="flex-1 flex flex-col">
+462	                {selectedDayStats ? (
+463	                  <>
+464	                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-950/80 px-4 py-5 shadow-[0_18px_45px_-28px_rgba(34,211,238,0.8)]">
+465	                    <div className="absolute inset-0 pointer-events-none opacity-70">
+466	                      <div className="absolute -left-16 -top-14 w-36 h-36 bg-emerald-500/12 blur-[90px]"></div>
+467	                      <div className="absolute right-6 -bottom-10 w-44 h-44 bg-cyan-500/14 blur-[110px]"></div>
+468	                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(34,211,238,0.08),transparent_35%),radial-gradient(circle_at_80%_70%,rgba(16,185,129,0.08),transparent_30%)]"></div>
+469	                    </div>
+470	
+471	                    <div className="relative flex flex-col items-center gap-4 w-full">
+472	                      <div className="relative flex-1 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-center shadow-[0_12px_30px_-20px_rgba(16,185,129,0.7)] overflow-hidden w-full max-w-xl">
+473	                        <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-white/0 via-white/5 to-white/0 opacity-60"></div>
+474	                        <div className="text-[11px] text-slate-400 flex items-center justify-center gap-3 mb-2">
+475	                          <span className="h-px w-6 bg-white/10"></span>
+476	                          <span>??? ???????</span>
+477	                          <span className="h-px w-6 bg-white/10"></span>
+478	                        </div>
+479	                        <div className="flex flex-col items-center gap-2">
+480	                          <Calendar className="w-6 h-6 text-emerald-300" />
+481	                          <div className="flex items-baseline gap-2 px-3 py-2 rounded-xl bg-slate-900/60 border border-white/10">
+482	                            <span className="text-4xl font-black text-emerald-100 leading-none min-w-[48px] text-center">{activeDayNumber}</span>
+483	                            <div className="flex flex-col items-start text-sm min-w-[120px]">
+484	                              <span className="text-cyan-100 font-semibold w-full text-center">{activeMonthLabel}</span>
+485	                              <div className="flex items-center gap-1 text-[11px] text-slate-300">
+486	                                <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+487	                                <span>{activeWeekday}</span>
+488	                              </div>
+489	                            </div>
+490	                          </div>
+491	                          <div className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-emerald-100 text-sm font-semibold shadow-[0_10px_30px_-24px_rgba(16,185,129,0.9)]">
+492	                            {selectedEfficiency}% ???????? ???
+493	                          </div>
+494	                          <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400">
+495	                            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/20 text-cyan-100">
+496	                              <Play className="w-3 h-3" />
+497	                              <span>{selectedDayStats.videoCount} ?????</span>
+498	                            </div>
+499	                            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-pink-500/10 border border-pink-400/20 text-pink-100">
+500	                              <Award className="w-3 h-3" />
+501	                              <span>{selectedDayStats.gradeCount} ????</span>
+502	                            </div>
+503	                            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/20 text-emerald-100">
+504	                              <Target className="w-3 h-3" />
+505	                              <span>{selectedDayStats.goalCount} ???</span>
+506	                            </div>
+507	                          </div>
+508	                        </div>
+509	                      </div>
+510	
+511	                      <div className="flex items-center justify-between w-full max-w-xl">
+512	                        <button
+513	                          onClick={() => shiftSelectedDay(-1)}
+514	                          className="group flex items-center gap-2 rounded-xl bg-gradient-to-l from-slate-800/70 to-slate-900/80 border border-white/10 px-4 py-3 text-slate-100 shadow-[0_10px_30px_-22px_rgba(0,0,0,0.9)] transition-all hover:border-emerald-300/40">
+515	                          <ArrowLeft className="w-4 h-4" />
+516	                          <span className="text-sm font-semibold">??? ???</span>
+517	                        </button>
+518	                        <button
+519	                          onClick={() => shiftSelectedDay(1)}
+520	                          className="group flex items-center gap-2 rounded-xl bg-gradient-to-r from-slate-800/70 to-slate-900/80 border border-white/10 px-4 py-3 text-slate-100 shadow-[0_10px_30px_-22px_rgba(0,0,0,0.9)] transition-all hover:border-cyan-300/40">
+521	                          <span className="text-sm font-semibold">??? ???</span>
+522	                          <ArrowRight className="w-4 h-4" />
+523	                        </button>
+524	                      </div>
+525	                    </div>
+526	                  </div>
+527	                  <div className="grid grid-cols-3 gap-3">
+528	                    <div className="rounded-2xl border border-cyan-400/20 bg-white/5 p-3 flex flex-col gap-1">
+529	                      <div className="flex items-center gap-2 text-[11px] text-cyan-200">
+530	                        <Play className="w-4 h-4" />
+531	                        ?????
+532	                      </div>
+533	                      <div className="text-2xl font-black text-white">{selectedDayStats.videoCount}</div>
+534	                      <div className="text-[11px] text-slate-400">??????? ?????</div>
+535	                    </div>
+536	                    <div className="rounded-2xl border border-pink-400/20 bg-white/5 p-3 flex flex-col gap-1">
+537	                      <div className="flex items-center gap-2 text-[11px] text-pink-200">
+538	                        <Award className="w-4 h-4" />
+539	                        ????
+540	                      </div>
+541	                      <div className="text-2xl font-black text-white">{selectedDayStats.gradeCount}</div>
+542	                      <div className="text-[11px] text-slate-400">????????? ????</div>
+543	                    </div>
+544	                    <div className="rounded-2xl border border-emerald-400/20 bg-white/5 p-3 flex flex-col gap-1">
+545	                      <div className="flex items-center gap-2 text-[11px] text-emerald-200">
+546	                        <Target className="w-4 h-4" />
+547	                        ?????
+548	                      </div>
+549	                      <div className="text-2xl font-black text-white">{selectedDayStats.goalCount}</div>
+550	                      <div className="text-[11px] text-slate-400">???? ???</div>
+551	                    </div>
+552	                  </div>
+553	
+554	                                    {/* detail lists moved to dedicated grid below */}
+555	                </>
+556	              ) : (
+557	                <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400 gap-3">
+558	                  <div className="w-20 h-20 rounded-full border border-white/10 bg-white/5 flex items-center justify-center">
+559	                    <Calendar className="w-10 h-10 text-emerald-300" />
+560	                  </div>
+561	                  <div className="text-3xl font-black text-white">{monthName}</div>
+562	                  <div className="text-sm text-slate-400 max-w-xs">
+563	                    ????? ??????? ??? ???: <span className="text-emerald-200 font-bold">{monthlyHighlights.efficiency}%</span>. ?? ??? ?? ?????? ?? ?? ?????? ?????? ?? ?????.
+564	                  </div>
+565	                </div>
+566	              )}
+567	            </div>
+568	          </div>
+569	        </div>
+570	      </div>
+571	
+572	      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+573	        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_50px_-28px_rgba(16,185,129,0.45)] min-h-[340px] max-h-[340px] flex flex-col">
+574	          <div className="flex items-center justify-between mb-3 text-white">
+575	            <div className="flex items-center gap-2">
+576	              <Sparkles className="w-5 h-5 text-emerald-300" />
+577	              <span className="font-bold text-sm">?????? ? ???????? ???</span>
+578	            </div>
+579	            <span className="text-xs text-slate-400">{planTasks.length + planHabits.length} ????</span>
+580	          </div>
+581	          <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+582	            {planTasks.length === 0 && planHabits.length === 0 && (
+583	              <div className="text-sm text-slate-500 border border-dashed border-white/10 rounded-xl px-3 py-4 text-center">
+584	                ???? ??? ??? ???? ????? ??? ????.
+585	              </div>
+586	            )}
+587	            {planTasks.map(t => (
+588	              <div
+589	                key={`task-${t.id}`}
+590	                className={`flex items-center justify-between text-sm rounded-xl px-3 py-2 border ${
+591	                  t.completed ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/10 bg-white/5 text-slate-200'
+592	                }`}
+593	              >
+594	                <div className="flex items-center gap-2">
+595	                  <CheckCircle2 className={`w-4 h-4 ${t.completed ? 'text-emerald-300' : 'text-slate-400'}`} />
+596	                  <span className="truncate max-w-[180px]">{t.title}</span>
+597	                </div>
+598	                <span className="text-[11px] text-emerald-200">{t.impactScore}</span>
+599	              </div>
+600	            ))}
+601	            {planHabits.map(h => (
+602	              <div
+603	                key={`habit-${h.id}`}
+604	                className={`flex items-center justify-between text-sm rounded-xl px-3 py-2 border ${
+605	                  h.completed ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : 'border-white/10 bg-white/5 text-slate-200'
+606	                }`}
+607	              >
+608	                <div className="flex items-center gap-2">
+609	                  <CheckCircle2 className={`w-4 h-4 ${h.completed ? 'text-emerald-300' : 'text-slate-400'}`} />
+610	                  <span className="truncate max-w-[180px]">{h.title}</span>
+611	                </div>
+612	                <span className="text-[11px] text-slate-400">{h.completed ? '????? ??' : '...'}</span>
+613	              </div>
+614	            ))}
+615	          </div>
+616	        </div>
+617	
+618	        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_50px_-28px_rgba(34,211,238,0.45)] min-h-[340px] max-h-[340px] flex flex-col overflow-hidden">
+619	          <div className="flex items-center gap-2 text-white mb-3">
+620	            <Sparkles className="w-5 h-5 text-cyan-300" />
+621	            <span className="font-bold text-sm">????????? ???</span>
+622	          </div>
+623	          <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+624	            {timelineEvents.length === 0 ? (
+625	              <p className="text-sm text-slate-500 border border-dashed border-white/10 rounded-xl px-3 py-4 text-center">
+626	                ??????? ???? ??? ??? ??? ????.
+627	              </p>
+628	            ) : (
+629	              timelineEvents.map(item => (
+630	                <div
+631	                  key={item.id}
+632	                  className={`flex items-center gap-3 p-3 rounded-xl border ${toneStyles[item.tone]} shadow-[0_10px_30px_-24px_rgba(34,211,238,0.6)]`}
+633	                >
+634	                  <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+635	                    {item.icon}
+636	                  </div>
+637	                  <div className="flex-1">
+638	                    <div className="text-sm font-bold text-white leading-tight">{item.title}</div>
+639	                    {item.hint && <div className="text-xs text-slate-400 mt-0.5">{item.hint}</div>}
+640	                  </div>
+641	                </div>
+642	              ))
+643	            )}
+644	          </div>
+645	        </div>
+646	      </div>
+647	    </div>
+648	    </div>
+649	  );
+650	};
+651	
+652	
