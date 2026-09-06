@@ -1,12 +1,14 @@
-﻿
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Goal, GoalType, DayNote, NoteTargetType } from '../types';
+import { Goal, GoalType, DayNote, NoteTargetType, GoalStatus, StudyLog, StudySubject } from '../types';
 import { storage, toISODate, toPersianDate, getRelativeDate } from '../utils';
 import {
   Plus,
   Trash2,
   CheckCircle2,
+  XCircle,
+  X,
   Target,
   TrendingUp,
   CalendarCheck,
@@ -41,6 +43,7 @@ export const GoalSection: React.FC = () => {
   const [viewEndDate, setViewEndDate] = useState<Date>(new Date());
   const [todayIso, setTodayIso] = useState<string>(() => toISODate(new Date()));
   const [notesByDate, setNotesByDate] = useState<Record<string, DayNote[]>>({});
+  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [noteModal, setNoteModal] = useState<{
     open: boolean;
     targetId: string;
@@ -49,6 +52,11 @@ export const GoalSection: React.FC = () => {
     date: string;
   }>({ open: false, targetId: '', targetType: 'goal', targetTitle: '', date: '' });
   const [noteText, setNoteText] = useState('');
+  const [detailsModal, setDetailsModal] = useState<{ open: boolean; text: string; title: string }>({
+    open: false,
+    text: '',
+    title: ''
+  });
   const activeIso = useMemo(() => toISODate(activeDate), [activeDate]);
   const activeDayShortLabel = useMemo(
     () => toPersianDate(activeDate).split(' ').slice(1, 3).join(' '),
@@ -65,8 +73,44 @@ export const GoalSection: React.FC = () => {
   const isViewingToday = useMemo(() => activeIso === todayIso, [activeIso, todayIso]);
   const dayNotes = notesByDate[activeIso] || [];
 
+  const normalizeGoal = (goal: Goal): Goal => {
+    const scheduleIso = goal.scheduledFor ? toISODate(new Date(goal.scheduledFor)) : toISODate(new Date(goal.createdAt));
+    const status: GoalStatus = goal.status ?? (goal.completed ? 'done' : 'pending');
+    if (status === 'done' && !goal.completedAt) {
+      // فقط برای اهداف کوتاه‌مدت و بلندمدت تاریخ تکمیل ثبت می‌شود
+      if (goal.type !== 'daily') {
+        const completionStamp = new Date(`${scheduleIso}T12:00:00`).toISOString();
+        return { ...goal, status, completed: true, completedAt: completionStamp };
+      }
+      return { ...goal, status, completed: true, completedAt: undefined };
+    }
+    if (status === 'missed' && !goal.missedAt) {
+      const missedStamp = new Date(`${scheduleIso}T12:00:00`).toISOString();
+      return { ...goal, status, completed: false, missedAt: missedStamp, completedAt: undefined };
+    }
+    return { ...goal, status, completed: status === 'done' };
+  };
+
+  const getStatus = (goal: Goal): GoalStatus => goal.status ?? (goal.completed ? 'done' : 'pending');
+  const isDone = (goal: Goal) => getStatus(goal) === 'done';
+  const isMissed = (goal: Goal) => getStatus(goal) === 'missed';
+  const isPending = (goal: Goal) => getStatus(goal) === 'pending';
+  const statusDate = (goal: Goal): string | null => {
+    if (isDone(goal) && goal.completedAt) return toISODate(new Date(goal.completedAt));
+    if (isMissed(goal) && goal.missedAt) return toISODate(new Date(goal.missedAt));
+    return null;
+  };
+  const resolvedOnDate = (goal: Goal, iso: string) => statusDate(goal) === iso;
+  const getScheduleDate = (goal: Goal) =>
+    goal.scheduledFor ? toISODate(new Date(goal.scheduledFor)) : toISODate(new Date(goal.createdAt));
+
   useEffect(() => {
-    setGoals(storage.get(storage.keys.GOALS, []));
+    const stored = storage.get(storage.keys.GOALS, []);
+    const normalized = stored.map(normalizeGoal);
+    setGoals(normalized);
+    if (stored.some(g => g.status === undefined)) {
+      storage.set(storage.keys.GOALS, normalized);
+    }
   }, []);
 
   useEffect(() => {
@@ -78,8 +122,32 @@ export const GoalSection: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setNotesByDate(storage.get(storage.keys.NOTES, {}));
+    const rawNotes = storage.get(storage.keys.NOTES, {});
+    const normalizedNotes = rawNotes && typeof rawNotes === 'object' ? rawNotes : {};
+    const rawLogs = storage.get<StudyLog[]>(storage.keys.STUDY_LOGS, []);
+    const normalizedLogs = Array.isArray(rawLogs) ? rawLogs : [];
+    setNotesByDate(normalizedNotes);
+    setStudyLogs(normalizedLogs);
   }, []);
+
+  useEffect(() => {
+    if (!goals.length) return;
+    let hasChange = false;
+    const next = goals.map(goal => {
+      if (goal.type !== 'daily' || !isPending(goal)) return goal;
+      const scheduleIso = getScheduleDate(goal);
+      if (scheduleIso < todayIso) {
+        hasChange = true;
+        const missedStamp = new Date(`${scheduleIso}T12:00:00`).toISOString();
+        return { ...goal, status: 'missed', completed: false, completedAt: undefined, missedAt: missedStamp };
+      }
+      return goal;
+    });
+
+    if (hasChange) {
+      persistGoals(next);
+    }
+  }, [todayIso, goals]);
 
   const persistGoals = (next: Goal[]) => {
     setGoals(next);
@@ -135,23 +203,12 @@ export const GoalSection: React.FC = () => {
     closeNoteModal();
   };
 
-  const getScheduleDate = (goal: Goal) => (goal.scheduledFor ? toISODate(new Date(goal.scheduledFor)) : toISODate(new Date(goal.createdAt)));
-  const completedOn = (goal: Goal) => (goal.completedAt ? toISODate(new Date(goal.completedAt)) : null);
-  const isCompletedBeforeActiveDay = (goal: Goal) => {
-    const completed = completedOn(goal);
-    return goal.completed && completed !== null && completed < activeIso;
-  };
-  const isCompletedOnActiveDay = (goal: Goal) => {
-    const completed = completedOn(goal);
-    return goal.completed && completed === activeIso;
-  };
+  const isCompletedOnActiveDay = (goal: Goal) => resolvedOnDate(goal, activeIso) && isDone(goal);
   const isVisibleOnActiveDay = (goal: Goal) => {
-    if (isCompletedBeforeActiveDay(goal)) return false;
-    const schedule = getScheduleDate(goal);
     if (goal.type === 'daily') {
-      return schedule === activeIso;
+      return getScheduleDate(goal) === activeIso;
     }
-    return schedule <= activeIso;
+    return true;
   };
 
   const addGoal = () => {
@@ -162,6 +219,7 @@ export const GoalSection: React.FC = () => {
       text: input.trim(),
       type: activeType,
       completed: false,
+      status: 'pending',
       createdAt: new Date().toISOString(),
       scheduledFor: scheduleIso
     };
@@ -170,20 +228,34 @@ export const GoalSection: React.FC = () => {
     setInput('');
   };
 
-  const toggleGoal = (id: string) => {
+  const setGoalStatus = (id: string, status: GoalStatus, forcedDate?: string) => {
+    let changed = false;
     const next = goals.map(g => {
-      if (g.id === id) {
-        const isCompleting = !g.completed;
-        const completionStamp = new Date(`${activeIso}T12:00:00`);
-        return {
-          ...g,
-          completed: isCompleting,
-          completedAt: isCompleting ? completionStamp.toISOString() : undefined
-        };
+      if (g.id !== id) return g;
+      changed = true;
+      const currentStatus = getStatus(g);
+      
+      // اگر روی همان دکمه‌ای که وضعیت فعلی است کلیک شد، نظر را برمی‌داریم (به pending برمی‌گردیم)
+      if ((status === 'done' && currentStatus === 'done') || (status === 'missed' && currentStatus === 'missed')) {
+        return { ...g, status: 'pending', completed: false, completedAt: undefined, missedAt: undefined };
       }
-      return g;
+      
+      const scheduleIso = getScheduleDate(g);
+      const resolvedIso = forcedDate || (status === 'missed' && g.type === 'daily' ? scheduleIso : activeIso);
+      const stamp = new Date(`${resolvedIso}T12:00:00`).toISOString();
+      if (status === 'done') {
+        // فقط برای اهداف کوتاه‌مدت و بلندمدت تاریخ تکمیل ثبت می‌شود
+        const completedAt = g.type === 'daily' ? undefined : stamp;
+        return { ...g, status, completed: true, completedAt, missedAt: undefined };
+      }
+      if (status === 'missed') {
+        return { ...g, status, completed: false, completedAt: undefined, missedAt: stamp };
+      }
+      return { ...g, status: 'pending', completed: false, completedAt: undefined, missedAt: undefined };
     });
-    persistGoals(next);
+    if (changed) {
+      persistGoals(next.map(normalizeGoal));
+    }
   };
 
   const deleteGoal = (id: string) => {
@@ -205,9 +277,9 @@ export const GoalSection: React.FC = () => {
 
   const completedByType = useMemo(
     () => ({
-      daily: goals.filter(g => g.completed && g.type === 'daily'),
-      'short-term': goals.filter(g => g.completed && g.type === 'short-term'),
-      'long-term': goals.filter(g => g.completed && g.type === 'long-term')
+      daily: goals.filter(g => isDone(g) && g.type === 'daily'),
+      'short-term': goals.filter(g => isDone(g) && g.type === 'short-term'),
+      'long-term': goals.filter(g => isDone(g) && g.type === 'long-term')
     }),
     [goals]
   );
@@ -217,7 +289,7 @@ export const GoalSection: React.FC = () => {
     const futureLimitIso = toISODate(getRelativeDate(30));
     return goals
       .filter(g => {
-        if (g.completed) return false;
+        if (!isPending(g)) return false;
         const schedule = getScheduleDate(g);
         return schedule > todayIso && schedule <= futureLimitIso;
       })
@@ -232,9 +304,9 @@ export const GoalSection: React.FC = () => {
     }, {} as Record<string, Goal[]>);
   }, [reminders]);
 
-  const completedCount = focusedGoals.filter(g => g.completed).length;
+  const completedCount = focusedGoals.filter(g => isDone(g)).length;
   const totalGoals = goals.length;
-  const totalCompleted = goals.filter(g => g.completed).length;
+  const totalCompleted = goals.filter(g => isDone(g)).length;
   const completionRate = totalGoals ? Math.round((totalCompleted / totalGoals) * 100) : 0;
   const activeCompletionRate = focusedGoals.length ? Math.round((completedCount / focusedGoals.length) * 100) : 0;
 
@@ -245,8 +317,7 @@ export const GoalSection: React.FC = () => {
         return g.type === activeType && scheduledIso === iso;
       });
       if (dayGoals.length === 0) return 0;
-      const completedToday = dayGoals.filter(g => g.completed && g.completedAt && toISODate(new Date(g.completedAt)) === iso)
-        .length;
+      const completedToday = dayGoals.filter(g => isDone(g) && resolvedOnDate(g, iso)).length;
       return (completedToday / dayGoals.length) * 100;
     };
 
@@ -267,6 +338,7 @@ export const GoalSection: React.FC = () => {
     });
   }, [goals, activeType, viewEndDate]);
 
+
   const rangeLabel = (r: number) => {
     if (r === 365) return 'یک سال';
     if (r === 730) return 'دو سال';
@@ -279,9 +351,7 @@ export const GoalSection: React.FC = () => {
     for (let i = days - 1; i >= 0; i--) {
       const d = getRelativeDate(-i, viewEndDate);
       const isoDate = toISODate(d);
-      const completedToday = goals.filter(
-        g => g.completed && g.completedAt && toISODate(new Date(g.completedAt)) === isoDate
-      );
+      const completedToday = goals.filter(g => isDone(g) && resolvedOnDate(g, isoDate));
       data.push({
         index: data.length,
         date: toPersianDate(d).split(' ').slice(1, 3).join(' '),
@@ -301,18 +371,22 @@ export const GoalSection: React.FC = () => {
     for (let i = days - 1; i >= 0; i--) {
       const d = getRelativeDate(-i, endDate);
       const isoDate = toISODate(d);
-      const completedToday = goals.filter(
-        g => g.completed && g.completedAt && toISODate(new Date(g.completedAt)) === isoDate
-      );
+      const completedToday = goals.filter(g => isDone(g) && resolvedOnDate(g, isoDate));
+      const studyManagementToday = studyLogs.filter(s => s.date === isoDate && s.subject === StudySubject.MODIRIYAT);
+      const englishToday = studyLogs.filter(s => s.date === isoDate && s.subject === StudySubject.ENGLISH);
       data.push({
         date: toPersianDate(d).split(' ').slice(1, 3).join(' '),
         fullDate: toPersianDate(d),
         count: completedToday.length,
-        items: completedToday.map(g => g.text)
+        items: completedToday.map(g => g.text),
+        studyManagementCount: studyManagementToday.length,
+        studyManagementItems: studyManagementToday.map(s => `مدیریت مطالعه: ${s.hours.toFixed(1)} ساعت`),
+        englishCount: englishToday.length,
+        englishItems: englishToday.map(s => `زبان انگلیسی: ${s.hours.toFixed(1)} ساعت`)
       });
     }
     return data;
-  }, [goals]);
+  }, [goals, studyLogs]);
   const ticks = useMemo(() => {
     if (chartData.length === 0) return [];
     const step = Math.max(1, Math.floor(chartData.length / 8));
@@ -325,13 +399,11 @@ export const GoalSection: React.FC = () => {
   const weeklyCompleted = useMemo(() => {
     const start = getRelativeDate(-6);
     const startIso = toISODate(start);
-    return goals.filter(g => g.completed && g.completedAt && toISODate(new Date(g.completedAt)) >= startIso).length;
+    return goals.filter(g => isDone(g) && g.completedAt && toISODate(new Date(g.completedAt)) >= startIso).length;
   }, [goals]);
 
   const activeDayCompleted = useMemo(() => {
-    return goals.filter(
-      g => g.completed && g.completedAt && toISODate(new Date(g.completedAt)) === activeIso
-    ).length;
+    return goals.filter(g => isDone(g) && resolvedOnDate(g, activeIso)).length;
   }, [goals, activeIso]);
 
   const weeklyTrend = useMemo(() => {
@@ -552,100 +624,184 @@ export const GoalSection: React.FC = () => {
               </div>
             </div>
 
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               {typeOrder.map(t => {
                 const list = goalsByType[t];
                 const typeCompletedToday = list.filter(g => isCompletedOnActiveDay(g)).length;
-                const typeRemaining = Math.max(list.length - typeCompletedToday, 0);
+                const typePending = list.filter(g => isPending(g)).length;
+                const typeMissed = list.filter(g => isMissed(g)).length;
+                const typeOpen = typePending + typeMissed;
                 return (
                   <div key={t} className="rounded-2xl border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 space-y-3 shadow-[0_10px_30px_-20px_rgba(34,211,238,0.4)] h-full flex flex-col min-h-[520px] max-h-[520px]">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-white">
                         <span className="text-sm font-black">{typeLabels[t]}</span>
-                        <span className="text-xs text-cyan-200 bg-white/10 px-2 py-1 rounded-full">فعال: {list.length}</span>
+                        <span className="text-xs text-cyan-200 bg-white/10 px-2 py-1 rounded-full">کل: {list.length}</span>
                       </div>
-                      <div className="text-[11px] text-slate-300 flex items-center gap-2">
-                        <span className="text-cyan-200">{typeRemaining} بازمانده</span>
+                      <div className="text-[11px] text-slate-300 flex items-center gap-2 flex-wrap">
+                        <span className="text-cyan-200">{typeOpen} باز</span>
                         <span className="text-slate-400">/</span>
-                        <span className="text-cyan-300">{typeCompletedToday} تکمیل امروز</span>
+                        <span className="text-cyan-300">{typeCompletedToday} تکمیل شده</span>
+                        <span className="text-slate-500">/</span>
+                        <span className="text-rose-300">{typeMissed} از دست رفته</span>
                       </div>
                     </div>
+
                     <div className="space-y-2 max-h-[430px] overflow-y-auto custom-scrollbar pr-1">
                       {list.length === 0 && (
                         <div className="text-slate-400 text-xs text-center py-4 border border-dashed border-white/10 rounded-xl bg-slate-950/70">
-                          هیچ هدف فعالی برای این دسته در این روز ندارید.
+                          هیچ هدفی برای این نوع در این روز ثبت نشده است.
                         </div>
                       )}
-                      {list.map(goal => (
-                        <div
-                          key={goal.id}
-                          className={`relative overflow-hidden rounded-2xl border transition-all duration-300 group ${
-                            goal.completed
-                              ? 'bg-gradient-to-r from-cyan-400/20 via-emerald-400/10 to-cyan-400/10 border-cyan-400/40 shadow-[0_12px_40px_-24px_rgba(34,211,238,0.8)]'
-                              : 'bg-slate-900/60 border-white/5 hover:border-cyan-300/40'
-                          }`}
-                        >
-                          <div className={`absolute inset-y-0 right-0 w-1 ${goal.completed ? 'bg-gradient-to-b from-cyan-400 to-emerald-300' : 'bg-white/10'} opacity-80`}></div>
-                          <div className="relative flex items-center gap-3 p-3">
-                            <button
-                              onClick={() => toggleGoal(goal.id)}
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center border transition ${
-                                goal.completed
-                                  ? 'bg-emerald-500 border-emerald-400 text-slate-900 shadow-[0_10px_30px_-15px_rgba(16,185,129,0.9)]'
-                                  : 'border-slate-600 text-slate-200 hover:border-cyan-400 hover:text-cyan-200'
-                              }`}
-                              title={goal.completed ? 'برگرداندن به حالت انجام نشده' : 'علامت‌گذاری به عنوان انجام شده'}
-                            >
-                              {goal.completed ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-xs font-black">GO</span>}
-                            </button>
-                            <div className="flex-1 min-w-0 space-y-1">
-                              <div className={`flex items-start justify-between gap-2 ${goal.completed ? 'text-emerald-50' : 'text-white'}`}>
-                                <div className={`text-sm font-bold leading-relaxed break-words ${goal.completed ? 'line-through opacity-80' : ''}`}>
-                                  {goal.text}
+
+                      {list.map(goal => {
+                        const status = getStatus(goal);
+                        // برای اهداف روزانه که تکمیل شده‌اند، از تاریخ برنامه‌ریزی استفاده می‌کنیم
+                        const resolvedIso = goal.type === 'daily' && status === 'done'
+                          ? getScheduleDate(goal)
+                          : statusDate(goal);
+                        // برای همه اهداف سال و روز هفته را هم نمایش می‌دهیم
+                        const dateParts = resolvedIso
+                          ? toPersianDate(new Date(`${resolvedIso}T12:00:00`)).split(' ')
+                          : [];
+                        const resolvedDateLabel = resolvedIso
+                          ? `${dateParts[2]} ${dateParts[1]} ${dateParts[3]} ${dateParts[0]}` // ماه، روز، سال و روز هفته
+                          : '';
+                        const scheduleDateParts = toPersianDate(new Date(getScheduleDate(goal))).split(' ');
+                        const scheduleLabel = `${scheduleDateParts[2]} ${scheduleDateParts[1]} ${scheduleDateParts[3]} ${scheduleDateParts[0]}`; // ماه، روز، سال و روز هفته
+                        const cardTone =
+                          status === 'done'
+                            ? 'bg-gradient-to-r from-cyan-400/20 via-emerald-400/10 to-cyan-400/10 border-cyan-400/40 shadow-[0_12px_40px_-24px_rgba(34,211,238,0.8)]'
+                            : status === 'missed'
+                              ? 'bg-gradient-to-r from-rose-500/15 via-rose-500/10 to-red-500/5 border-rose-400/40 shadow-[0_12px_40px_-24px_rgba(239,68,68,0.5)]'
+                              : 'bg-slate-900/60 border-white/5 hover:border-cyan-300/40';
+                        const stripeTone =
+                          status === 'done'
+                            ? 'bg-gradient-to-b from-cyan-400 to-emerald-300'
+                            : status === 'missed'
+                              ? 'bg-gradient-to-b from-rose-400 to-amber-400'
+                              : 'bg-white/10';
+                        return (
+                          <div
+                            key={goal.id}
+                            className={`relative overflow-hidden rounded-2xl border transition-all duration-300 group ${cardTone}`}
+                          >
+                            <div className={`absolute inset-y-0 right-0 w-1 ${stripeTone} opacity-80`}></div>
+                            <div className="relative flex flex-col gap-3 p-4 min-h-[100px]">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => setGoalStatus(goal.id, 'done')}
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center border transition ${
+                                      status === 'done'
+                                        ? 'bg-emerald-500 border-emerald-400 text-slate-900 shadow-[0_8px_20px_-12px_rgba(16,185,129,0.9)]'
+                                        : 'border-slate-600 text-slate-200 hover:border-cyan-400 hover:text-cyan-200'
+                                    }`}
+                                    title="Mark as done"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setGoalStatus(goal.id, 'missed')}
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center border transition ${
+                                      status === 'missed'
+                                        ? 'bg-rose-500 border-rose-400 text-white shadow-[0_8px_20px_-12px_rgba(239,68,68,0.6)]'
+                                        : 'border-slate-600 text-slate-200 hover:border-rose-400 hover:text-rose-200'
+                                    }`}
+                                    title="Mark as not done"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
                                 </div>
-                                <span className="hidden md:inline text-[10px] text-emerald-200 bg-white/10 rounded-full px-2 py-1">
-                                  {typeLabels[goal.type]}
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {goal.type === 'daily' && (
+                                    <>
+                                      {resolvedIso ? (
+                                        <span className={`text-[11px] rounded-full px-2 py-0.5 ${
+                                          status === 'done'
+                                            ? 'text-emerald-100 bg-emerald-500/20 border border-emerald-400/50'
+                                            : 'text-rose-100 bg-rose-500/20 border border-rose-400/50'
+                                        }`}>
+                                          {status === 'done' ? `تکمیل شده: ${resolvedDateLabel}` : `انجام نشده: ${resolvedDateLabel}`}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-emerald-200 bg-emerald-500/10 border border-emerald-400/30 rounded-full px-2 py-0.5">
+                                          {scheduleLabel}
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                  {(goal.type === 'short-term' || goal.type === 'long-term') && resolvedIso && (
+                                    <span className={`text-[11px] rounded-full px-2 py-0.5 ${
+                                      status === 'done'
+                                        ? 'text-emerald-100 bg-emerald-500/20 border border-emerald-400/50'
+                                        : 'text-rose-100 bg-rose-500/20 border border-rose-400/50'
+                                    }`}>
+                                      {status === 'done' ? `تکمیل شده: ${resolvedDateLabel}` : `انجام نشده: ${resolvedDateLabel}`}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => openNoteModal(goal.id, goal.text)}
+                                    className="p-1.5 rounded-lg border border-white/10 bg-slate-900/60 hover:border-cyan-300/60 hover:text-white transition text-slate-300 flex items-center justify-center gap-1 w-7 h-7"
+                                    title="یادداشت برای این هدف"
+                                  >
+                                    <NotebookPen className="w-3.5 h-3.5" />
+                                    {dayNotes.some(n => n.targetType === 'goal' && n.targetId === goal.id) && (
+                                      <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => deleteGoal(goal.id)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition flex items-center justify-center w-7 h-7"
+                                    title="حذف هدف"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                              <div className="text-[11px] text-slate-400 flex items-center gap-2 flex-wrap">
-                                <span className="w-2 h-2 rounded-full bg-cyan-300/70 animate-pulse"></span>
-                                {goal.completedAt
-                                  ? `تکمیل: ${toPersianDate(new Date(goal.completedAt)).split(' ').slice(1, 3).join(' ')}`
-                                  : 'در انتظار انجام...'}
-                                <span className="text-emerald-200 bg-emerald-500/10 border border-emerald-400/30 rounded-full px-2 py-0.5">
-                                  {toPersianDate(new Date(getScheduleDate(goal))).split(' ').slice(1, 3).join(' ')}
-                                </span>
-                                {isCompletedOnActiveDay(goal) && (
-                                  <span className="text-[10px] text-emerald-200 bg-white/10 rounded-full px-2 py-0.5">تکمیل امروز</span>
-                                )}
+                              <div className="flex-1 min-w-0 space-y-1.5">
+                                <div className={`${
+                                  status === 'done' ? 'text-emerald-50' : status === 'missed' ? 'text-rose-50' : 'text-white'
+                                }`}>
+                                  <div className={`text-sm font-bold leading-relaxed ${
+                                    status !== 'pending' ? 'line-through opacity-80' : ''
+                                  }`}>
+                                    {(() => {
+                                      const words = goal.text.split(/\s+/);
+                                      const firstTwelveWords = words.slice(0, 12).join(' ');
+                                      const hasMore = words.length > 16;
+                                      
+                                      if (hasMore) {
+                                        return (
+                                          <>
+                                            <span className="inline">{firstTwelveWords}</span>
+                                            <span className="inline">...</span>
+                                            <button
+                                              onClick={() => setDetailsModal({ open: true, text: goal.text, title: `جزئیات هدف ${typeLabels[goal.type]}` })}
+                                              className="mr-1 text-cyan-300 hover:text-cyan-200 underline text-xs font-semibold inline"
+                                            >
+                                              جزئیات
+                                            </button>
+                                          </>
+                                        );
+                                      }
+                                      return <span>{goal.text}</span>;
+                                    })()}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                            <button
-                              onClick={() => openNoteModal(goal.id, goal.text)}
-                              className="p-2 rounded-lg border border-white/10 bg-slate-900/60 hover:border-cyan-300/60 hover:text-white transition text-slate-300 flex items-center gap-1"
-                              title="یادداشت برای این هدف"
-                            >
-                              <NotebookPen className="w-4 h-4" />
-                              {dayNotes.some(n => n.targetType === 'goal' && n.targetId === goal.id) && (
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteGoal(goal.id)}
-                              className="p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition"
-                              title="حذف هدف"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
               })}
           </div>
-
           <div className="relative flex flex-col lg:flex-row gap-3 pt-3 border-t border-white/5">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               {typeOrder.map(t => (
@@ -706,7 +862,7 @@ export const GoalSection: React.FC = () => {
           </div>
           <div className="relative p-3 space-y-4 flex-1 min-h-0 overflow-y-auto custom-scrollbar">
             {completionLogData.slice().reverse().map((day, idx) => (
-              day.count > 0 && (
+              (day.count > 0 || day.studyManagementCount > 0 || day.englishCount > 0) && (
                 <div key={idx} className="relative pl-4">
                   <div className="absolute right-0 top-2 w-[2px] h-full bg-gradient-to-b from-cyan-400/70 to-transparent"></div>
                   <div className="text-sm font-bold text-cyan-300 flex items-center gap-2">
@@ -716,17 +872,43 @@ export const GoalSection: React.FC = () => {
                   <div className="mt-2 space-y-2">
                     {day.items.map((item: string, i: number) => (
                       <div key={i} className="text-sm text-slate-100 bg-slate-900/70 border border-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
-                        {item}
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 shrink-0 flex-shrink-0"></span>
+                        <span className="flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
+                          {item.length > 60 ? (
+                            <>
+                              <span className="inline-block max-w-[calc(100%-70px)] overflow-hidden text-ellipsis whitespace-nowrap">{item.slice(0, 60)}...</span>
+                              <button
+                                onClick={() => setDetailsModal({ open: true, text: item, title: 'جزئیات هدف تکمیل شده' })}
+                                className="mr-1 text-cyan-300 hover:text-cyan-200 underline text-xs font-semibold whitespace-nowrap inline-block"
+                              >
+                                جزئیات
+                              </button>
+                            </>
+                          ) : (
+                            <span className="inline-block overflow-hidden text-ellipsis whitespace-nowrap">{item}</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                    {day.studyManagementItems && day.studyManagementItems.map((item: string, i: number) => (
+                      <div key={`study-${i}`} className="text-sm text-slate-100 bg-slate-900/70 border border-teal-400/30 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0 flex-shrink-0"></span>
+                        <span className="flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">{item}</span>
+                      </div>
+                    ))}
+                    {day.englishItems && day.englishItems.map((item: string, i: number) => (
+                      <div key={`english-${i}`} className="text-sm text-slate-100 bg-slate-900/70 border border-orange-400/30 rounded-xl px-3 py-2 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 flex-shrink-0"></span>
+                        <span className="flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">{item}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )
             ))}
-            {completionLogData.every(d => d.count === 0) && (
+            {completionLogData.every(d => d.count === 0 && d.studyManagementCount === 0 && d.englishCount === 0) && (
               <div className="text-center text-slate-500 text-sm py-6">
-                هنوز تکمیلی ثبت نشده است. وقتی هدفی را کامل کنید، اینجا به تفکیک روز می‌آید.
+                هنوز تکمیلی ثبت نشده است. وقتی هدفی را کامل کنید یا مطالعه‌ای ثبت کنید، اینجا به تفکیک روز می‌آید.
               </div>
             )}
           </div>
@@ -758,8 +940,22 @@ export const GoalSection: React.FC = () => {
                 <div className="space-y-2">
                   {goals.map((goal) => (
                   <div key={goal.id} className="flex items-center gap-2 text-slate-100 bg-slate-950/70 border border-white/10 rounded-xl px-3 py-2">
-                      <span className="text-[10px] text-cyan-200 bg-cyan-500/10 border border-cyan-400/40 rounded-full px-2 py-0.5">{typeLabels[goal.type]}</span>
-                      <span className="text-sm font-bold leading-tight">{goal.text}</span>
+                      <span className="text-[10px] text-cyan-200 bg-cyan-500/10 border border-cyan-400/40 rounded-full px-2 py-0.5 shrink-0 flex-shrink-0">{typeLabels[goal.type]}</span>
+                      <span className="text-sm font-bold flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">
+                        {goal.text.length > 60 ? (
+                          <>
+                            <span className="inline-block max-w-[calc(100%-70px)] overflow-hidden text-ellipsis whitespace-nowrap">{goal.text.slice(0, 60)}...</span>
+                            <button
+                              onClick={() => setDetailsModal({ open: true, text: goal.text, title: `جزئیات هدف ${typeLabels[goal.type]}` })}
+                              className="mr-1 text-cyan-300 hover:text-cyan-200 underline text-xs font-semibold whitespace-nowrap inline-block"
+                            >
+                              جزئیات
+                            </button>
+                          </>
+                        ) : (
+                          <span className="inline-block overflow-hidden text-ellipsis whitespace-nowrap">{goal.text}</span>
+                        )}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -805,14 +1001,34 @@ export const GoalSection: React.FC = () => {
                     {completed.slice(0, 20).map(goal => (
                       <div key={goal.id} className="flex items-center gap-3 bg-slate-900/70 border border-white/5 rounded-xl px-3 py-2">
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-bold text-white truncate">{goal.text}</div>
+                          <div className="text-sm font-bold text-white whitespace-nowrap overflow-hidden text-ellipsis">
+                            {goal.text.length > 70 ? (
+                              <>
+                                <span className="inline-block max-w-[calc(100%-80px)] overflow-hidden text-ellipsis whitespace-nowrap">{goal.text.slice(0, 70)}...</span>
+                                <button
+                                  onClick={() => setDetailsModal({ open: true, text: goal.text, title: `جزئیات هدف ${typeLabels[goal.type]}` })}
+                                  className="mr-1 text-cyan-300 hover:text-cyan-200 underline text-xs font-semibold whitespace-nowrap inline-block"
+                                >
+                                  جزئیات
+                                </button>
+                              </>
+                            ) : (
+                              <span className="inline-block overflow-hidden text-ellipsis whitespace-nowrap">{goal.text}</span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-slate-400 flex items-center gap-2 flex-wrap">
-                            <span className="text-emerald-200">تکمیل: {goal.completedAt ? toPersianDate(new Date(goal.completedAt)).split(' ').slice(1, 3).join(' ') : '---'}</span>
+                            <span className="text-emerald-200">تکمیل: {goal.completedAt ? (() => {
+                              const dateParts = toPersianDate(new Date(goal.completedAt)).split(' ');
+                              // برای اهداف کوتاه‌مدت و بلندمدت سال و روز هفته را هم نمایش می‌دهیم
+                              return goal.type === 'daily'
+                                ? dateParts.slice(1, 3).join(' ') // روزانه: فقط ماه و روز
+                                : `${dateParts[2]} ${dateParts[1]} ${dateParts[3]} ${dateParts[0]}`; // کوتاه‌مدت/بلندمدت: ماه، روز، سال و روز هفته
+                            })() : '---'}</span>
                             <span className="text-slate-500">/</span>
                             <span className="text-slate-300">نمایش از: {toPersianDate(new Date(getScheduleDate(goal))).split(' ').slice(1, 3).join(' ')}</span>
                           </div>
                         </div>
-                        <span className="text-[10px] text-emerald-200 bg-white/10 rounded-full px-2 py-1">Done</span>
+                        <span className="text-[10px] text-emerald-200 bg-white/10 rounded-full px-2 py-1 shrink-0">تکمیل شده</span>
                       </div>
                     ))}
                   </div>
@@ -823,38 +1039,38 @@ export const GoalSection: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        <div className="relative p-5 rounded-[24px] border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl flex flex-col gap-4 overflow-hidden transition-all duration-500 hover:border-cyan-300/60 hover:shadow-[0_26px_70px_-34px_rgba(0,0,0,0.95)]">
+      <div className="grid grid-cols-1 gap-4 md:gap-6">
+        <div className="relative p-3 sm:p-4 md:p-5 rounded-[20px] sm:rounded-[24px] border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl flex flex-col gap-3 md:gap-4 overflow-hidden transition-all duration-500 hover:border-cyan-300/60 hover:shadow-[0_26px_70px_-34px_rgba(0,0,0,0.95)]">
           <div className="absolute inset-0 opacity-40 pointer-events-none">
             <div className="absolute -right-10 -top-10 w-44 h-44 bg-emerald-500/20 blur-[100px] animate-float"></div>
             <div className="absolute left-6 bottom-0 w-32 h-32 bg-cyan-500/15 blur-[90px] animate-pulse" style={{ animationDelay: '1.4s' }}></div>
           </div>
-          <div className="relative flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm text-slate-300">رادار پیشرفت اهداف</div>
-                <div className="text-xl font-bold text-white flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-emerald-300" />
-                  {rangeLabel(chartRange)}
+          <div className="relative flex flex-col gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex-shrink-0">
+                <div className="text-xs sm:text-sm text-slate-300">رادار پیشرفت اهداف</div>
+                <div className="text-lg sm:text-xl font-bold text-white flex items-center gap-1.5 sm:gap-2">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300 flex-shrink-0" />
+                  <span>{rangeLabel(chartRange)}</span>
                 </div>
               </div>
-              <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                {chartRanges.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setChartRange(r)}
-                    className={chartCategoryClass(chartRange === r)}
-                  >
-                    {rangeLabel(r)}
-                  </button>
-                ))}
-              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {chartRanges.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setChartRange(r)}
+                  className={chartCategoryClass(chartRange === r) + " whitespace-nowrap text-[11px] sm:text-xs"}
+                >
+                  {rangeLabel(r)}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="w-full h-[320px] relative">
-            <ResponsiveContainer width="99%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <div className="w-full h-[240px] sm:h-[280px] md:h-[320px] relative min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 5, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorGoals" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#34d399" stopOpacity={0.9}/>
@@ -869,28 +1085,36 @@ export const GoalSection: React.FC = () => {
                   ticks={ticks}
                   tickFormatter={(value) => chartData[value]?.date || ''}
                   stroke="#94a3b8"
-                  tick={{ fontSize: 10 }}
-                  padding={{ left: 10, right: 10 }}
+                  tick={{ fontSize: 9 }}
+                  padding={{ left: 5, right: 5 }}
                   allowDecimals={false}
+                  interval="preserveStartEnd"
+                  minTickGap={20}
                 />
-                <YAxis allowDecimals={false} stroke="#94a3b8" tick={{ fontSize: 10 }} />
+                <YAxis 
+                  allowDecimals={false} 
+                  stroke="#94a3b8" 
+                  tick={{ fontSize: 9 }} 
+                  width={30}
+                />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', borderRadius: '12px' }}
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', borderRadius: '12px', fontSize: '12px' }}
                   labelStyle={{ color: '#34d399', fontWeight: 'bold' }}
                   labelFormatter={(idx: any) => chartData[idx]?.fullDate || chartData[idx]?.date || ''}
                   formatter={(value: any) => [`${value} هدف`, 'تکمیل']}
                 />
-                <Area type="monotone" dataKey="count" stroke="#34d399" fillOpacity={1} fill="url(#colorGoals)" strokeWidth={3} />
+                <Area type="monotone" dataKey="count" stroke="#34d399" fillOpacity={1} fill="url(#colorGoals)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
             {!chartData.some(d => d.count > 0) && (
-              <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">
+              <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs sm:text-sm px-4 text-center">
                 هنوز تکمیلی در این بازه ثبت نشده است.
               </div>
             )}
           </div>
         </div>
       </div>
+
     </div>
 
       {noteModal.open && createPortal(
@@ -936,6 +1160,43 @@ export const GoalSection: React.FC = () => {
                     ذخیره یادداشت
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {detailsModal.open && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl">
+          <div className="relative w-full max-w-2xl glass-card border border-cyan-400/40 rounded-3xl overflow-hidden shadow-[0_25px_80px_-35px_rgba(34,211,238,0.6)]">
+            <div className="absolute inset-0 opacity-50 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900"></div>
+            <div className="relative p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Target className="w-5 h-5 text-cyan-300" />
+                    {detailsModal.title}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setDetailsModal({ open: false, text: '', title: '' })}
+                  className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition border border-white/10"
+                  aria-label="بستن جزئیات"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="rounded-2xl bg-slate-900/70 border border-white/10 text-white text-sm p-4 leading-relaxed whitespace-pre-wrap break-words">
+                {detailsModal.text}
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setDetailsModal({ open: false, text: '', title: '' })}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 text-slate-900 font-bold shadow-[0_0_18px_rgba(34,211,238,0.45)] hover:from-cyan-300 hover:to-emerald-300"
+                >
+                  بستن
+                </button>
               </div>
             </div>
           </div>

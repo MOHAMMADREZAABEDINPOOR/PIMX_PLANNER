@@ -68,7 +68,7 @@ export const VideoSection: React.FC = () => {
   const [addCount, setAddCount] = useState<number>(1);
   const [saveToast, setSaveToast] = useState<boolean>(false);
   const [errorToast, setErrorToast] = useState<string | null>(null);
-  const [chartMode, setChartMode] = useState<'SUBJECT' | 'ALL'>('SUBJECT');
+  const [chartMode, setChartMode] = useState<'SUBJECT' | 'ALL'>('ALL');
   const [chartRange, setChartRange] = useState<number>(14);
   const [chartOffset, setChartOffset] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -466,10 +466,21 @@ export const VideoSection: React.FC = () => {
 
       <section className={progressSectionCardClass}>
         <div className="relative flex flex-col gap-6">
+          <div className="rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-amber-100 shadow-[0_14px_34px_-24px_rgba(245,158,11,0.8)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/40 bg-amber-400/10 px-3 py-1 text-sm font-black">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-300"></span>
+                غیرفعال
+              </div>
+              <div className="text-xs text-amber-100/80">
+                این صفحه نگهداری شده، اما داده‌های آن در تقویم، بهره‌وری و درصدهای پیشرفت محاسبه نمی‌شود.
+              </div>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/70 border border-white/10 text-cyan-200 text-xs font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-              تالار ویدیو | LIVE
+              <span className="w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.8)]"></span>
+              تالار ویدیو | DISABLED
             </div>
             <div className="flex items-center gap-2 text-white text-2xl font-black">
               <Activity className="w-6 h-6 text-cyan-300" />
@@ -1081,4 +1092,3 @@ export const VideoSection: React.FC = () => {
     </div>
   );
 };
-

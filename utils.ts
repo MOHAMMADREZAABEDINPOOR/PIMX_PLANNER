@@ -1,12 +1,42 @@
+export type CalendarMode = 'jalali' | 'gregorian';
+
+const CALENDAR_MODE_KEY = 'planner_calendar_mode';
+
+const getStoredCalendarMode = (): CalendarMode => {
+  if (typeof localStorage === 'undefined') return 'jalali';
+  const value = localStorage.getItem(CALENDAR_MODE_KEY);
+  return value === 'gregorian' ? 'gregorian' : 'jalali';
+};
+
+export const calendarModeStorage = {
+  key: CALENDAR_MODE_KEY,
+  get: getStoredCalendarMode,
+  set: (mode: CalendarMode) => {
+    localStorage.setItem(CALENDAR_MODE_KEY, mode);
+    window.dispatchEvent(new CustomEvent('planner-calendar-mode-change', { detail: mode }));
+  }
+};
+
+const calendarLocale = (mode: CalendarMode = getStoredCalendarMode()) =>
+  mode === 'gregorian' ? 'fa-IR-u-ca-gregory' : 'fa-IR-u-ca-persian';
+
+export const getCalendarModeLabel = (mode: CalendarMode = getStoredCalendarMode()) =>
+  mode === 'gregorian' ? 'میلادی' : 'جلالی';
+
+export const getCalendarWeekDays = (mode: CalendarMode = getStoredCalendarMode()) =>
+  mode === 'gregorian' ? ['ی', 'د', 'س', 'چ', 'پ', 'ج', 'ش'] : ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+
 // Date Utils
-export const toPersianDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('fa-IR', {
+export const formatAppDate = (date: Date, mode: CalendarMode = getStoredCalendarMode()): string => {
+  return new Intl.DateTimeFormat(calendarLocale(mode), {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     weekday: 'long'
   }).format(date);
 };
+
+export const toPersianDate = (date: Date): string => formatAppDate(date);
 
 export const toISODate = (date: Date): string => {
   // Returns YYYY-MM-DD based on LOCAL time, not UTC.
@@ -22,8 +52,8 @@ export const getRelativeDate = (offsetDays: number, baseDate: Date = new Date())
   return date;
 };
 
-// Persian Calendar Grid Generator
-export const getPersianMonthDays = (baseDate: Date) => {
+// Calendar Grid Generator
+export const getCalendarMonthDays = (baseDate: Date, mode: CalendarMode = getStoredCalendarMode()) => {
   const toEnglishNumber = (value: string) => {
     const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
     const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
@@ -34,8 +64,32 @@ export const getPersianMonthDays = (baseDate: Date) => {
     return Number.isFinite(parsed) ? parsed : 1;
   };
 
+  if (mode === 'gregorian') {
+    const today = new Date(baseDate);
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const startDayOfWeek = firstDay.getDay();
+    const startDate = new Date(currentYear, currentMonth, 1 - startDayOfWeek);
+    const days = [];
+
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
+      days.push({
+        date: d,
+        dayNum: d.getDate(),
+        monthNum: d.getMonth() + 1,
+        yearNum: d.getFullYear(),
+        isCurrentMonth: d.getMonth() === currentMonth
+      });
+    }
+
+    return { days, currentMonth: currentMonth + 1, currentYear };
+  }
+
   try {
-    const formatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+    const formatter = new Intl.DateTimeFormat(calendarLocale(mode), {
       day: 'numeric',
       month: 'numeric',
       year: 'numeric'
@@ -113,17 +167,37 @@ export const getPersianMonthDays = (baseDate: Date) => {
   }
 };
 
+export const getPersianMonthDays = (baseDate: Date) => getCalendarMonthDays(baseDate);
+
+export const formatCalendarMonthYear = (date: Date, mode: CalendarMode = getStoredCalendarMode()) =>
+  new Intl.DateTimeFormat(calendarLocale(mode), { month: 'long', year: 'numeric' }).format(date);
+
+export const formatCalendarPart = (
+  date: Date,
+  options: Intl.DateTimeFormatOptions,
+  mode: CalendarMode = getStoredCalendarMode()
+) => new Intl.DateTimeFormat(calendarLocale(mode), options).format(date);
+
 // Storage Keys
 const KEYS = {
   VIDEO_CONFIG: 'planner_video_config',
   VIDEO_LOGS: 'planner_video_logs',
+  STUDY_CONFIG: 'planner_study_config',
+  STUDY_LOGS: 'planner_study_logs',
   DAILY_PLANS: 'planner_daily_plans',
   GRADES: 'planner_grades',
   GOALS: 'planner_goals',
   GLOBAL_HABITS: 'planner_global_habits',
   NOTES: 'planner_notes',
   CHAT_HISTORY: 'planner_chat_history',
-  CHAT_SESSIONS: 'planner_chat_sessions'
+  CHAT_SESSIONS: 'planner_chat_sessions',
+  REMINDERS: 'planner_reminders',
+  DIARY_ENTRIES: 'planner_diary_entries',
+  FUTURE_PLANS: 'planner_future_plans',
+  FUTURE_PLAN_CATEGORIES: 'planner_future_plan_categories',
+  PLANNED_PEOPLE: 'planner_planned_people',
+  PLANNED_FAMILIES: 'planner_planned_families',
+  CALENDAR_MODE: CALENDAR_MODE_KEY
 };
 
 // Default API base; can be overridden via VITE_API_BASE_URL
@@ -184,7 +258,26 @@ export const storage = {
   get: <T>(key: string, defaultValue: T): T => {
     try {
       const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : defaultValue;
+      if (!item) return defaultValue;
+      const parsed = JSON.parse(item);
+      if (parsed === null || parsed === undefined) {
+        return defaultValue;
+      }
+      
+      // Type safety validation
+      if (Array.isArray(defaultValue)) {
+        if (!Array.isArray(parsed)) {
+          return defaultValue;
+        }
+      } else if (typeof defaultValue === 'object' && defaultValue !== null) {
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          return defaultValue;
+        }
+      } else if (typeof defaultValue !== typeof parsed) {
+        return defaultValue;
+      }
+      
+      return parsed as T;
     } catch {
       return defaultValue;
     }

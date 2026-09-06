@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Calendar, Check, RotateCcw, Sparkles, X } from 'lucide-react';
-import { getPersianMonthDays, toISODate, toPersianDate } from '../utils';
+import {
+  calendarModeStorage,
+  formatCalendarMonthYear,
+  getCalendarWeekDays,
+  getPersianMonthDays,
+  toISODate,
+  toPersianDate
+} from '../utils';
 
 interface DataResetModalProps {
   open: boolean;
@@ -27,6 +34,7 @@ const buildRange = (startIso: string, endIso: string) => {
 
 export const DataResetModal: React.FC<DataResetModalProps> = ({ open, sectionLabel, onClose, onConfirm }) => {
   const todayIso = useMemo(() => toISODate(new Date()), []);
+  const [calendarMode, setCalendarMode] = useState(() => calendarModeStorage.get());
   const [viewDate, setViewDate] = useState<Date>(new Date());
   const [mode, setMode] = useState<'range' | 'multi'>('range');
   const [selected, setSelected] = useState<Set<string>>(new Set([todayIso]));
@@ -43,7 +51,16 @@ export const DataResetModal: React.FC<DataResetModalProps> = ({ open, sectionLab
     }
   }, [open, todayIso]);
 
-  const calendar = useMemo(() => getPersianMonthDays(viewDate), [viewDate]);
+  const calendar = useMemo(() => getPersianMonthDays(viewDate), [viewDate, calendarMode]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const mode = (event as CustomEvent).detail;
+      if (mode === 'jalali' || mode === 'gregorian') setCalendarMode(mode);
+    };
+    window.addEventListener('planner-calendar-mode-change', handler);
+    return () => window.removeEventListener('planner-calendar-mode-change', handler);
+  }, []);
 
   if (!open) return null;
 
@@ -104,10 +121,8 @@ export const DataResetModal: React.FC<DataResetModalProps> = ({ open, sectionLab
     return `حذف داده‌های بخش ${sectionLabel} در ${selected.size} روز انتخاب‌شده`;
   };
 
-  const monthLabel = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
-    month: 'long',
-    year: 'numeric'
-  }).format(viewDate);
+  const monthLabel = formatCalendarMonthYear(viewDate, calendarMode);
+  const weekDays = getCalendarWeekDays(calendarMode);
 
   const renderCalendar = () => (
     <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-4 shadow-xl">
@@ -132,7 +147,7 @@ export const DataResetModal: React.FC<DataResetModalProps> = ({ open, sectionLab
         </button>
       </div>
       <div className="grid grid-cols-7 gap-2 text-center text-[11px] text-slate-400 mb-2">
-        {['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'].map(day => (
+        {weekDays.map(day => (
           <div key={day} className="py-1 rounded-lg bg-white/5">
             {day}
           </div>

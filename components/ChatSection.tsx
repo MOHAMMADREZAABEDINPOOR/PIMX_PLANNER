@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { storage, toISODate, getRelativeDate } from '../utils';
-import { DailyPlan, VideoLog, GradeEntry, ChatSession, Message } from '../types';
+import { DailyPlan, GradeEntry, ChatSession, Message } from '../types';
 import { Send, Bot, User, Sparkles, BarChart2, TrendingUp, Cpu, Trash2, Copy, Plus, MessageSquare, Menu, X, Check, Edit2, Save } from 'lucide-react';
 
 const FormatMessage = ({ text }: { text: string }) => {
@@ -291,13 +291,11 @@ export const ChatSection: React.FC = () => {
       }
 
       const plans = storage.get<Record<string, DailyPlan>>(storage.keys.DAILY_PLANS, {});
-      const logs = storage.get<VideoLog[]>(storage.keys.VIDEO_LOGS, []);
       const grades = storage.get<GradeEntry[]>(storage.keys.GRADES, []);
       const twoWeeksAgo = getRelativeDate(-14);
       const isoTwoWeeks = toISODate(twoWeeksAgo);
       const contextData = {
         plans: Object.values(plans).filter(p => p.date >= isoTwoWeeks),
-        videos: logs.filter(l => l.date >= isoTwoWeeks),
         grades: grades.filter(g => g.date >= isoTwoWeeks)
       };
 
@@ -571,7 +569,6 @@ export const ChatSection: React.FC = () => {
     </div>
   );
 };
-
 
 
 

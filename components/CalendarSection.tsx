@@ -1,13 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { storage, getPersianMonthDays, toISODate, getRelativeDate } from '../utils';
-import { DailyPlan, VideoLog, GradeEntry, Goal, DayNote } from '../types';
+import {
+  calendarModeStorage,
+  formatCalendarMonthYear,
+  formatCalendarPart,
+  getCalendarModeLabel,
+  getCalendarWeekDays,
+  getPersianMonthDays,
+  getRelativeDate,
+  storage,
+  toISODate
+} from '../utils';
+import { DailyPlan, GradeEntry, Goal, DayNote, StudyLog, StudySubject, FuturePlan } from '../types';
 import {
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
-  Play,
   Award,
   Calendar,
+  CalendarClock,
   BarChart2,
   Target,
   Sparkles,
@@ -20,46 +30,65 @@ import { RangeProgressRow, RANGE_WINDOWS, RangeProgressItem, clampRangePercent }
 type DaySnapshot = {
   date: Date;
   plan?: DailyPlan;
-  videoCount: number;
+  futurePlanCount: number;
   gradeCount: number;
   goalCount: number;
   goals: Goal[];
-  videos?: VideoLog[];
+  futurePlans?: FuturePlan[];
   grades?: GradeEntry[];
   notes?: DayNote[];
   noteCount: number;
+  studyManagementCount: number;
+  studyManagementAverageHours: number;
+  englishCount: number;
+  englishHours: number;
 };
 
 type TimelineTone = 'emerald' | 'cyan' | 'amber' | 'pink' | 'slate';
 export const CalendarSection: React.FC = () => {
+  const [calendarMode, setCalendarMode] = useState(() => calendarModeStorage.get());
   const [viewDate, setViewDate] = useState<Date>(new Date());
   const [calendarData, setCalendarData] = useState<{ days: any[]; currentMonth: number; currentYear: number }>(
     () => getPersianMonthDays(new Date())
   );
   const [plans, setPlans] = useState<Record<string, DailyPlan>>({});
-  const [videoLogs, setVideoLogs] = useState<VideoLog[]>([]);
+  const [futurePlans, setFuturePlans] = useState<FuturePlan[]>([]);
   const [grades, setGrades] = useState<GradeEntry[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [notesByDate, setNotesByDate] = useState<Record<string, DayNote[]>>({});
+  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [selectedDayStats, setSelectedDayStats] = useState<DaySnapshot | null>(null);
 
   useEffect(() => {
     setPlans(storage.get(storage.keys.DAILY_PLANS, {}));
-    setVideoLogs(storage.get(storage.keys.VIDEO_LOGS, []));
-    setGrades(storage.get(storage.keys.GRADES, []));
-    setGoals(storage.get(storage.keys.GOALS, []));
+    setFuturePlans(ensureArray(storage.get(storage.keys.FUTURE_PLANS, []), []));
+    setGrades(ensureArray(storage.get(storage.keys.GRADES, []), []));
+    setGoals(ensureArray(storage.get(storage.keys.GOALS, []), []));
     setNotesByDate(storage.get(storage.keys.NOTES, {}));
+    setStudyLogs(ensureArray(storage.get(storage.keys.STUDY_LOGS, []), []));
   }, []);
 
   useEffect(() => {
     setCalendarData(getPersianMonthDays(viewDate));
-  }, [viewDate]);
+  }, [viewDate, calendarMode]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const mode = (event as CustomEvent).detail;
+      if (mode === 'jalali' || mode === 'gregorian') setCalendarMode(mode);
+    };
+    window.addEventListener('planner-calendar-mode-change', handler);
+    return () => window.removeEventListener('planner-calendar-mode-change', handler);
+  }, []);
 
   const changeMonth = (offset: number) => {
     const newDate = new Date(viewDate);
     newDate.setMonth(newDate.getMonth() + offset);
     setViewDate(newDate);
     setSelectedDayStats(null);
+  };
+  const ensureArray = <T,>(value: unknown, fallback: T[]): T[] => {
+    return Array.isArray(value) ? value : fallback;
   };
 
   const safeIsoFromString = (value?: string | null) => {
@@ -77,16 +106,37 @@ export const CalendarSection: React.FC = () => {
     };
   };
 
+  const normalizeFuturePlans = (items: FuturePlan[]) => {
+    return ensureArray<FuturePlan>(items, [])
+      .filter(plan => plan && plan.id && plan.title && plan.targetDate)
+      .sort((a, b) => {
+        const dateDiff = a.targetDate.localeCompare(b.targetDate);
+        if (dateDiff !== 0) return dateDiff;
+        const priorityOrder = { high: 0, normal: 1, low: 2 };
+        return priorityOrder[a.priority || 'normal'] - priorityOrder[b.priority || 'normal'];
+      });
+  };
+
   const getDayStats = (date: Date) => {
     const iso = toISODate(date);
     const plan = normalizePlan(plans[iso]);
-    const videos = videoLogs.filter(v => v.date === iso);
+    const dayFuturePlans = normalizeFuturePlans(futurePlans).filter(plan => plan.targetDate === iso);
     const daysGrades = grades.filter(g => g.date === iso);
     const dayGoals = goals.filter(g => {
       const completedIso = g.completed ? safeIsoFromString(g.completedAt) : null;
       return g.completed && completedIso === iso;
     });
     const notes = notesByDate[iso] || [];
+    const dayStudyLogs = studyLogs.filter(s => s.date === iso);
+    const studyManagementLogs = dayStudyLogs.filter(s => s.subject === StudySubject.MODIRIYAT);
+    const englishLogs = dayStudyLogs.filter(s => s.subject === StudySubject.ENGLISH);
+    
+    // محاسبه میانگین زمان مطالعه کل درس‌ها برای این روز
+    const totalStudyHours = dayStudyLogs.reduce((sum, log) => sum + log.hours, 0);
+    const averageStudyHours = dayStudyLogs.length > 0 ? totalStudyHours / dayStudyLogs.length : 0;
+    
+    // محاسبه مجموع ساعت‌های مطالعه زبان انگلیسی برای این روز
+    const englishTotalHours = englishLogs.reduce((sum, log) => sum + log.hours, 0);
 
     let score = 0;
     if (plan) {
@@ -100,40 +150,59 @@ export const CalendarSection: React.FC = () => {
       score = totalScore === 0 ? 0 : Math.round((earnedScore / totalScore) * 100);
     }
 
-    return { score, plan, videos, daysGrades, dayGoals, notes };
+    return { 
+      score, 
+      plan, 
+      dayFuturePlans, 
+      daysGrades, 
+      dayGoals, 
+      notes,
+      studyManagementCount: studyManagementLogs.length > 0 ? 1 : 0,
+      studyManagementAverageHours: averageStudyHours,
+      englishCount: englishLogs.length > 0 ? 1 : 0,
+      englishHours: englishTotalHours
+    };
   };
 
   // Auto-select today when component first loads, and refresh selected day stats when data changes
   useEffect(() => {
     const targetDate = selectedDayStats?.date || new Date();
-    const { plan, videos, daysGrades, dayGoals, notes } = getDayStats(targetDate);
+    const { plan, dayFuturePlans, daysGrades, dayGoals, notes, studyManagementCount, studyManagementAverageHours, englishCount, englishHours } = getDayStats(targetDate);
     setSelectedDayStats({
       date: targetDate,
       plan,
-      videoCount: videos.reduce((acc, v) => acc + (Number.isFinite(v.count) ? v.count : 0), 0),
+      futurePlanCount: dayFuturePlans.length,
       gradeCount: daysGrades.length,
       goalCount: dayGoals.length,
       goals: dayGoals,
-      videos,
+      futurePlans: dayFuturePlans,
       grades: daysGrades,
       notes,
-      noteCount: notes.length
+      noteCount: notes.length,
+      studyManagementCount,
+      studyManagementAverageHours,
+      englishCount,
+      englishHours
     });
-  }, [plans, videoLogs, grades, goals, notesByDate]);
+  }, [plans, futurePlans, grades, goals, notesByDate, studyLogs]);
 
   const handleDayClick = (date: Date) => {
-    const { plan, videos, daysGrades, dayGoals, notes } = getDayStats(date);
+    const { plan, dayFuturePlans, daysGrades, dayGoals, notes, studyManagementCount, studyManagementAverageHours, englishCount, englishHours } = getDayStats(date);
     setSelectedDayStats({
       date,
       plan,
-      videoCount: videos.reduce((acc, v) => acc + (Number.isFinite(v.count) ? v.count : 0), 0),
+      futurePlanCount: dayFuturePlans.length,
       gradeCount: daysGrades.length,
       goalCount: dayGoals.length,
       goals: dayGoals,
-      videos,
+      futurePlans: dayFuturePlans,
       grades: daysGrades,
       notes,
-      noteCount: notes.length
+      noteCount: notes.length,
+      studyManagementCount,
+      studyManagementAverageHours,
+      englishCount,
+      englishHours
     });
   };
 
@@ -145,53 +214,53 @@ export const CalendarSection: React.FC = () => {
     handleDayClick(nextDate);
   };
 
-  const weekDays = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
-  const monthName = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long', year: 'numeric' }).format(viewDate);
+  const weekDays = getCalendarWeekDays(calendarMode);
+  const monthName = formatCalendarMonthYear(viewDate, calendarMode);
 
   const monthlyHighlights = useMemo(() => {
     const monthDays = calendarData.days.filter(d => d.isCurrentMonth);
 
     let totalScore = 0;
     let scoreDays = 0;
-    let videoTotal = 0;
+    let futurePlanTotal = 0;
     let gradeTotal = 0;
     let goalTotal = 0;
 
     monthDays.forEach(day => {
-      const { score, videos, daysGrades, dayGoals } = getDayStats(day.date);
+      const { score, dayFuturePlans, daysGrades, dayGoals } = getDayStats(day.date);
       if (score > 0) {
         totalScore += score;
         scoreDays += 1;
       }
-      videoTotal += videos.reduce((acc, v) => acc + v.count, 0);
+      futurePlanTotal += dayFuturePlans.length;
       gradeTotal += daysGrades.length;
       goalTotal += dayGoals.length;
     });
 
     return {
       efficiency: Math.round(totalScore / (scoreDays || 1)),
-      videoTotal,
+      futurePlanTotal,
       gradeTotal,
       goalTotal
     };
-  }, [calendarData, plans, videoLogs, grades, goals]);
+  }, [calendarData, plans, futurePlans, grades, goals]);
 
   const activeDate = selectedDayStats?.date || viewDate;
   const activeDateLabel = useMemo(
-    () => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long', year: 'numeric' }).format(activeDate),
-    [activeDate]
+    () => formatCalendarPart(activeDate, { day: 'numeric', month: 'long', year: 'numeric' }, calendarMode),
+    [activeDate, calendarMode]
   );
   const activeDayNumber = useMemo(
-    () => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric' }).format(activeDate),
-    [activeDate]
+    () => formatCalendarPart(activeDate, { day: 'numeric' }, calendarMode),
+    [activeDate, calendarMode]
   );
   const activeMonthLabel = useMemo(
-    () => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { month: 'long', year: 'numeric' }).format(activeDate),
-    [activeDate]
+    () => formatCalendarPart(activeDate, { month: 'long', year: 'numeric' }, calendarMode),
+    [activeDate, calendarMode]
   );
   const activeWeekday = useMemo(
-    () => new Intl.DateTimeFormat('fa-IR-u-ca-persian', { weekday: 'long' }).format(activeDate),
-    [activeDate]
+    () => formatCalendarPart(activeDate, { weekday: 'long' }, calendarMode),
+    [activeDate, calendarMode]
   );
 
   const averageEfficiencyRange = (startOffset: number, length: number) => {
@@ -214,11 +283,11 @@ export const CalendarSection: React.FC = () => {
   const clampPercent = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 
   const getDailyCounts = (date: Date) => {
-    const { videos, daysGrades, dayGoals } = getDayStats(date);
-    const videoCount = videos.reduce((acc, v) => acc + (Number.isFinite(v.count) ? v.count : 0), 0);
+    const { dayFuturePlans, daysGrades, dayGoals } = getDayStats(date);
+    const futurePlanCount = dayFuturePlans.length;
     const gradeCount = daysGrades.length;
     const goalCount = dayGoals.length;
-    return { videoCount, gradeCount, goalCount };
+    return { futurePlanCount, gradeCount, goalCount };
   };
 
   const activeDayProgress = useMemo(() => {
@@ -240,13 +309,53 @@ export const CalendarSection: React.FC = () => {
 
     return {
       counts: current,
-      videoPercent: growth(current.videoCount, previous.videoCount),
+      futurePlanPercent: growth(current.futurePlanCount, previous.futurePlanCount),
       goalPercent: growth(current.goalCount, previous.goalCount)
     };
-  }, [activeDate, videoLogs, grades, goals]);
+  }, [activeDate, futurePlans, grades, goals]);
 
-  const videoDailyPercent = activeDayProgress.videoPercent;
+  const futurePlanDailyPercent = activeDayProgress.futurePlanPercent;
   const goalDailyPercent = activeDayProgress.goalPercent;
+
+  // محاسبه درصد رشد برای یادداشت‌ها
+  const noteDailyPercent = useMemo(() => {
+    const current = selectedDayStats?.noteCount || 0;
+    const prevDate = new Date(activeDate);
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevIso = toISODate(prevDate);
+    const prevStats = getDayStats(prevDate);
+    const previous = prevStats.notes?.length || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    if (current <= previous) return 0;
+    const delta = ((current - previous) / previous) * 100;
+    return clampPercent(delta);
+  }, [activeDate, selectedDayStats]);
+
+  // محاسبه درصد رشد برای مدیریت مطالعه (بر اساس میانگین زمان مطالعه کل درس‌ها)
+  const studyManagementDailyPercent = useMemo(() => {
+    const current = selectedDayStats?.studyManagementAverageHours || 0;
+    const prevDate = new Date(activeDate);
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevStats = getDayStats(prevDate);
+    const previous = prevStats.studyManagementAverageHours || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    if (current <= previous) return 0;
+    const delta = ((current - previous) / previous) * 100;
+    return clampPercent(delta);
+  }, [activeDate, selectedDayStats]);
+
+  // محاسبه درصد رشد برای زبان انگلیسی
+  const englishDailyPercent = useMemo(() => {
+    const current = selectedDayStats?.englishCount || 0;
+    const prevDate = new Date(activeDate);
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevStats = getDayStats(prevDate);
+    const previous = prevStats.englishCount || 0;
+    if (previous === 0) return current > 0 ? 100 : 0;
+    if (current <= previous) return 0;
+    const delta = ((current - previous) / previous) * 100;
+    return clampPercent(delta);
+  }, [activeDate, selectedDayStats]);
 
   const goalCompletionItems: RangeProgressItem[] = useMemo(() => {
     const parseIso = (value?: string | null) => (value ? safeIsoFromString(value) : null);
@@ -325,13 +434,13 @@ export const CalendarSection: React.FC = () => {
       });
     });
 
-    (selectedDayStats.videos || []).forEach((v, idx) => {
+    (selectedDayStats.futurePlans || []).forEach((plan, idx) => {
       events.push({
-        id: `video-${v.id || idx}`,
-        title: `${v.count} ویدیو`,
-        hint: `${v.subject}`,
+        id: `future-plan-${plan.id || idx}`,
+        title: `برنامه آینده: ${plan.title}`,
+        hint: `${plan.targetDate} | ${plan.priority === 'high' ? 'اولویت بالا' : plan.priority === 'low' ? 'اولویت پایین' : 'اولویت معمولی'}`,
         tone: 'cyan',
-        icon: <Play className="text-cyan-300 fill-cyan-300/30" />
+        icon: <CalendarClock className="text-cyan-300" />
       });
     });
 
@@ -341,7 +450,7 @@ export const CalendarSection: React.FC = () => {
         title: `یادداشت: ${note.targetTitle}`,
         hint: note.text,
         tone: 'slate',
-        icon: <NotebookPen className="text-emerald-300" />
+        icon: <NotebookPen className="text-purple-300" />
       });
     });
 
@@ -364,6 +473,26 @@ export const CalendarSection: React.FC = () => {
         icon: <Target className="text-emerald-300" />
       });
     });
+
+    if (selectedDayStats.studyManagementAverageHours > 0) {
+      events.push({
+        id: 'study-management',
+        title: 'مدیریت مطالعه',
+        hint: `میانگین: ${selectedDayStats.studyManagementAverageHours.toFixed(1)} ساعت`,
+        tone: 'cyan',
+        icon: <Activity className="text-indigo-300" />
+      });
+    }
+
+    if (selectedDayStats.englishCount > 0) {
+      events.push({
+        id: 'english-study',
+        title: 'زبان انگلیسی',
+        hint: `${selectedDayStats.englishHours?.toFixed(1) || '0.0'} ساعت`,
+        tone: 'amber',
+        icon: <Activity className="text-orange-300" />
+      });
+    }
 
     return events;
   }, [selectedDayStats]);
@@ -392,7 +521,7 @@ export const CalendarSection: React.FC = () => {
           <div className="space-y-4 flex-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/70 border border-cyan-400/30 text-cyan-200 text-xs tracking-wide">
               <Sparkles className="w-4 h-4 text-cyan-300" />
-              <span>کپسول زمان | مرور ماهانه</span>
+              <span>کپسول زمان | مرور ماهانه | {getCalendarModeLabel(calendarMode)}</span>
             </div>
 
             <div className="flex flex-col gap-2 text-white">
@@ -401,7 +530,7 @@ export const CalendarSection: React.FC = () => {
                 <h2 className="text-3xl md:text-4xl font-black tracking-tight">تقویم، نمره و برنامه‌ی هر روز</h2>
               </div>
               <p className="text-sm md:text-base text-slate-200/70 leading-relaxed max-w-3xl">
-                برای هر روز می‌توانی برنامه، ویدیوها، نمره‌ها و اهداف تکمیل‌شده را ببینی. روی روز دلخواه کلیک کن تا جزئیات کامل را همین‌جا ببینی.
+                برای هر روز می‌توانی برنامه‌های آینده، نمره‌ها، اهداف تکمیل‌شده و یادداشت‌ها را ببینی. روی روز دلخواه کلیک کن تا جزئیات کامل را همین‌جا ببینی.
               </p>
             </div>
 
@@ -432,7 +561,7 @@ export const CalendarSection: React.FC = () => {
                   </span>
                   <span className="text-slate-200 font-semibold">{dailyEfficiency}%</span>
                 </div>
-                <div className="relative w-20 h-20 md:w-24 md:h-24">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
                   <div
                     className="absolute inset-0 rounded-full border border-cyan-400/40"
                     style={{
@@ -442,8 +571,8 @@ export const CalendarSection: React.FC = () => {
                     }}
                   ></div>
                   <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-                    <div className="text-lg md:text-2xl font-black text-white">{dailyEfficiency}%</div>
-                    <div className="text-[9px] md:text-[11px] text-slate-400">امتیاز امروز</div>
+                    <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{dailyEfficiency}%</div>
+                    <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">امتیاز امروز</div>
                   </div>
                 </div>
               </div>
@@ -452,7 +581,7 @@ export const CalendarSection: React.FC = () => {
                   <span>۷ روز اخیر</span>
                   <span className="text-emerald-200 font-semibold">{weeklyEfficiency}%</span>
                 </div>
-                <div className="relative w-20 h-20 md:w-24 md:h-24">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
                   <div
                     className="absolute inset-0 rounded-full border border-emerald-400/40"
                     style={{
@@ -462,8 +591,8 @@ export const CalendarSection: React.FC = () => {
                     }}
                   ></div>
                   <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-                    <div className="text-lg md:text-2xl font-black text-white">{weeklyEfficiency}%</div>
-                    <div className="text-[9px] md:text-[11px] text-slate-400">میانگین هفته</div>
+                    <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{weeklyEfficiency}%</div>
+                    <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">میانگین هفته</div>
                   </div>
                 </div>
               </div>
@@ -472,7 +601,7 @@ export const CalendarSection: React.FC = () => {
                   <span>۲ هفته اخیر</span>
                   <span className="text-amber-200 font-semibold">{biWeeklyEfficiency}%</span>
                 </div>
-                <div className="relative w-20 h-20 md:w-24 md:h-24">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
                   <div
                     className="absolute inset-0 rounded-full border border-amber-400/40"
                     style={{
@@ -482,8 +611,8 @@ export const CalendarSection: React.FC = () => {
                     }}
                   ></div>
                   <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-                    <div className="text-lg md:text-2xl font-black text-white">{biWeeklyEfficiency}%</div>
-                    <div className="text-[9px] md:text-[11px] text-slate-400">ریتم ۱۴ روزه</div>
+                    <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{biWeeklyEfficiency}%</div>
+                    <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">ریتم ۱۴ روزه</div>
                   </div>
                 </div>
               </div>
@@ -492,7 +621,7 @@ export const CalendarSection: React.FC = () => {
                   <span>ماه اخیر</span>
                   <span className="text-cyan-200 font-semibold">{monthlyWindowEfficiency}%</span>
                 </div>
-                <div className="relative w-20 h-20 md:w-24 md:h-24">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
                   <div
                     className="absolute inset-0 rounded-full border border-cyan-400/40"
                     style={{
@@ -502,8 +631,8 @@ export const CalendarSection: React.FC = () => {
                     }}
                   ></div>
                   <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-                    <div className="text-lg md:text-2xl font-black text-white">{monthlyWindowEfficiency}%</div>
-                    <div className="text-[9px] md:text-[11px] text-slate-400">میانگین ماهانه</div>
+                    <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{monthlyWindowEfficiency}%</div>
+                    <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">میانگین ماهانه</div>
                   </div>
                 </div>
               </div>
@@ -562,27 +691,27 @@ export const CalendarSection: React.FC = () => {
         <div className="rounded-2xl border border-cyan-400/35 bg-gradient-to-br from-[#0a1c2c] via-[#0f2236] to-slate-950/85 p-4 flex flex-col items-center gap-3 shadow-[0_16px_44px_-28px_rgba(34,211,238,0.45)]">
           <div className="w-full flex items-center justify-between text-[11px] text-slate-200">
             <span className="flex items-center gap-2">
-              <Play className="w-4 h-4 text-cyan-300" />
-              ویدیوهای امروز
+              <CalendarClock className="w-4 h-4 text-cyan-300" />
+              برنامه‌های آینده
             </span>
-            <span className="text-slate-200 font-semibold">{activeDayProgress.counts.videoCount}</span>
+            <span className="text-slate-200 font-semibold">{activeDayProgress.counts.futurePlanCount}</span>
           </div>
-          <div className="relative w-20 h-20 md:w-24 md:h-24">
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
             <div
               className="absolute inset-0 rounded-full border border-cyan-400/40"
               style={{
-                background: `conic-gradient(#22d3ee ${videoDailyPercent * 3.6}deg, rgba(148,163,184,0.25) ${
-                  videoDailyPercent * 3.6
+                background: `conic-gradient(#22d3ee ${futurePlanDailyPercent * 3.6}deg, rgba(148,163,184,0.25) ${
+                  futurePlanDailyPercent * 3.6
                 }deg)`
               }}
             ></div>
             <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-              <div className="text-lg md:text-2xl font-black text-white">{videoDailyPercent}%</div>
-              <div className="text-[9px] md:text-[11px] text-slate-400">ریتم مطالعه ویدیو</div>
+              <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{futurePlanDailyPercent}%</div>
+              <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">ریتم برنامه آینده</div>
             </div>
           </div>
           <p className="text-[11px] text-slate-400 text-center">
-            درصد رشد تعداد ویدیوهای این روز نسبت به روز قبل؛ اگر کمتر یا برابر دیروز باشد، ۰٪ نمایش داده می‌شود.
+            درصد رشد تعداد برنامه‌های آینده این روز نسبت به روز قبل؛ اگر کمتر یا برابر دیروز باشد، ۰٪ نمایش داده می‌شود.
           </p>
         </div>
         <div className="rounded-2xl border border-rose-400/40 bg-gradient-to-br from-[#1a0b0c] via-[#2a0f1a] to-slate-950/90 p-4 flex flex-col items-center gap-3 shadow-[0_18px_52px_-30px_rgba(248,113,113,0.6)]">
@@ -593,7 +722,7 @@ export const CalendarSection: React.FC = () => {
             </span>
             <span className="text-rose-100 font-semibold">{selectedEfficiency}%</span>
           </div>
-          <div className="relative w-20 h-20 md:w-24 md:h-24">
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
             <div
               className="absolute inset-0 rounded-full border border-rose-400/50"
               style={{
@@ -603,8 +732,8 @@ export const CalendarSection: React.FC = () => {
               }}
             ></div>
             <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-              <div className="text-lg md:text-2xl font-black text-white">{selectedEfficiency}%</div>
-              <div className="text-[9px] md:text-[11px] text-rose-100/80">عادت‌ها و کارهای امروز</div>
+              <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{selectedEfficiency}%</div>
+              <div className="text-[8px] sm:text-[9px] md:text-[11px] text-rose-100/80">عادت‌ها و کارهای امروز</div>
             </div>
           </div>
           <p className="text-[11px] text-slate-400 text-center">
@@ -619,7 +748,7 @@ export const CalendarSection: React.FC = () => {
             </span>
             <span className="text-slate-200 font-semibold">{activeDayProgress.counts.goalCount}</span>
           </div>
-          <div className="relative w-20 h-20 md:w-24 md:h-24">
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
             <div
               className="absolute inset-0 rounded-full border border-emerald-400/40"
               style={{
@@ -629,12 +758,93 @@ export const CalendarSection: React.FC = () => {
               }}
             ></div>
             <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
-              <div className="text-lg md:text-2xl font-black text-white">{goalDailyPercent}%</div>
-              <div className="text-[9px] md:text-[11px] text-slate-400">پیشرفت اهداف</div>
+              <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{goalDailyPercent}%</div>
+              <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">پیشرفت اهداف</div>
             </div>
           </div>
           <p className="text-[11px] text-slate-400 text-center">
             درصد رشد تعداد اهداف تکمیل‌شده این روز نسبت به روز قبل؛ روزهای آینده یا بدون رشد با ۰٪ نمایش داده می‌شوند.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-purple-400/35 bg-gradient-to-br from-[#1a0f1a] via-[#2a1f2a] to-slate-950/85 p-4 flex flex-col items-center gap-3 shadow-[0_16px_44px_-28px_rgba(168,85,247,0.45)]">
+          <div className="w-full flex items-center justify-between text-[11px] text-purple-200">
+            <span className="flex items-center gap-2">
+              <NotebookPen className="w-4 h-4 text-purple-300" />
+              یادداشت‌ها
+            </span>
+            <span className="text-purple-100 font-semibold">{selectedDayStats?.noteCount || 0}</span>
+          </div>
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
+            <div
+              className="absolute inset-0 rounded-full border border-purple-400/40"
+              style={{
+                background: `conic-gradient(#a78bfa ${noteDailyPercent * 3.6}deg, rgba(167,139,250,0.25) ${
+                  noteDailyPercent * 3.6
+                }deg)`
+              }}
+            ></div>
+            <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
+              <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{noteDailyPercent}%</div>
+              <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">پیشرفت یادداشت‌ها</div>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400 text-center">
+            درصد رشد تعداد یادداشت‌های این روز نسبت به روز قبل؛ اگر کمتر یا برابر دیروز باشد، ۰٪ نمایش داده می‌شود.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-indigo-400/35 bg-gradient-to-br from-[#0f0a1f] via-[#1f0f2f] to-slate-950/85 p-4 flex flex-col items-center gap-3 shadow-[0_16px_44px_-28px_rgba(99,102,241,0.45)]">
+          <div className="w-full flex items-center justify-between text-[11px] text-indigo-200">
+            <span className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-indigo-300" />
+              مدیریت مطالعه
+            </span>
+            <span className="text-indigo-100 font-semibold">{selectedDayStats?.studyManagementAverageHours?.toFixed(1) || '0.0'}</span>
+          </div>
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
+            <div
+              className="absolute inset-0 rounded-full border border-indigo-400/40"
+              style={{
+                background: `conic-gradient(#6366f1 ${studyManagementDailyPercent * 3.6}deg, rgba(99,102,241,0.25) ${
+                  studyManagementDailyPercent * 3.6
+                }deg)`
+              }}
+            ></div>
+            <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
+              <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{studyManagementDailyPercent}%</div>
+              <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">میانگین مطالعه</div>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400 text-center">
+            درصد رشد میانگین زمان مطالعه کل درس‌ها این روز نسبت به روز قبل؛ اگر کمتر یا برابر دیروز باشد، ۰٪ نمایش داده می‌شود.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-orange-400/35 bg-gradient-to-br from-[#1a0f0a] via-[#2a1f14] to-slate-950/85 p-4 flex flex-col items-center gap-3 shadow-[0_16px_44px_-28px_rgba(245,158,11,0.45)]">
+          <div className="w-full flex items-center justify-between text-[11px] text-orange-200">
+            <span className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-orange-300" />
+              زبان انگلیسی
+            </span>
+            <span className="text-orange-100 font-semibold">{selectedDayStats?.englishHours?.toFixed(1) || '0.0'} ساعت</span>
+          </div>
+          <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24">
+            <div
+              className="absolute inset-0 rounded-full border border-orange-400/40"
+              style={{
+                background: `conic-gradient(#f59e0b ${englishDailyPercent * 3.6}deg, rgba(245,158,11,0.25) ${
+                  englishDailyPercent * 3.6
+                }deg)`
+              }}
+            ></div>
+            <div className="absolute inset-2 rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-center px-2">
+              <div className="text-sm sm:text-lg md:text-2xl font-black text-white">{englishDailyPercent}%</div>
+              <div className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400">پیشرفت زبان انگلیسی</div>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400 text-center">
+            درصد رشد ثبت مطالعه زبان انگلیسی این روز نسبت به روز قبل؛ اگر کمتر یا برابر دیروز باشد، ۰٪ نمایش داده می‌شود.
           </p>
         </div>
       </div>
@@ -646,17 +856,17 @@ export const CalendarSection: React.FC = () => {
               <div className="absolute -left-16 top-10 w-44 h-44 bg-cyan-500/10 rounded-full blur-[100px] animate-pulse"></div>
               <div className="absolute right-0 -bottom-10 w-56 h-56 bg-purple-500/10 rounded-full blur-[120px] animate-float"></div>
             </div>
-            <div className="relative space-y-4 flex-1 flex flex-col">
-              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 md:gap-3 text-center text-[11px] sm:text-[12px] font-bold text-cyan-200/80 uppercase">
+            <div className="relative space-y-2 sm:space-y-4 flex-1 flex flex-col">
+              <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 lg:gap-3 text-center text-[9px] sm:text-[11px] md:text-[12px] font-bold text-cyan-200/80 uppercase">
                 {weekDays.map(d => (
                   <div key={d}>{d}</div>
                 ))}
               </div>
 
               <div className="flex-1 pr-1">
-              <div className="grid grid-cols-7 gap-1.5 sm:gap-2 md:gap-3">
+              <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 lg:gap-3">
               {visibleCalendarDays.map((day, idx) => {
-                const { score, videos, daysGrades, dayGoals, notes } = getDayStats(day.date);
+                const { score, dayFuturePlans, daysGrades, dayGoals, notes } = getDayStats(day.date);
                 const isToday = toISODate(new Date()) === toISODate(day.date);
                 const isSelected = selectedDayStats && toISODate(selectedDayStats.date) === toISODate(day.date);
 
@@ -667,11 +877,11 @@ export const CalendarSection: React.FC = () => {
                   <div
                     key={idx}
                     onClick={() => handleDayClick(day.date)}
-                    className={`relative aspect-[4/6] sm:aspect-[9/12] rounded-2xl cursor-pointer transition-all duration-300 group overflow-hidden border ${
+                    className={`relative aspect-[3/4] sm:aspect-[4/6] md:aspect-[9/12] rounded-xl sm:rounded-2xl cursor-pointer transition-all duration-300 group overflow-hidden border ${
                       isSelected
                         ? 'border-emerald-400/50 shadow-[0_0_35px_-12px_rgba(16,185,129,0.8)] scale-105'
                         : 'border-white/10 hover:border-emerald-300/30 hover:scale-105'
-                    } ${!day.isCurrentMonth ? 'opacity-40' : 'opacity-100'} ${isToday ? 'ring-2 ring-cyan-400/70 ring-offset-[3px] ring-offset-slate-900' : ''}`}
+                    } ${!day.isCurrentMonth ? 'opacity-40' : 'opacity-100'} ${isToday ? 'ring-2 ring-cyan-400/70 ring-offset-[2px] sm:ring-offset-[3px] ring-offset-slate-900' : ''}`}
                     style={{
                       background: `linear-gradient(145deg, rgba(15,23,42,0.8) 0%, rgba(15,23,42,0.6) 50%, rgba(15,23,42,0.9) 100%)`
                     }}
@@ -679,33 +889,35 @@ export const CalendarSection: React.FC = () => {
                     <div className={`absolute inset-0 bg-gradient-to-br ${glow} opacity-0 group-hover:opacity-80 transition-opacity duration-500`}></div>
                     {score > 0 && (
                       <div
-                        className="absolute inset-1 rounded-[14px] opacity-70"
+                        className="absolute inset-0.5 sm:inset-1 rounded-lg sm:rounded-[14px] opacity-70"
                         style={{
                           background: `conic-gradient(from 90deg, rgba(239,68,68,0.28) ${score}%, rgba(148,163,184,0.16) ${score}% 100%)`
                         }}
                       ></div>
                     )}
-                    <div className="relative z-10 h-full w-full flex flex-col items-center justify-between p-2">
-                      <div className="w-full flex items-center justify-between text-[11px] text-slate-400">
+                    <div className="relative z-10 h-full w-full flex flex-col items-center justify-between p-1 sm:p-1.5 md:p-2">
+                      <div className="w-full flex items-center justify-between text-[8px] sm:text-[10px] md:text-[11px] text-slate-400">
                         {isToday ? <span className="text-cyan-200 font-semibold">امروز</span> : <span className="opacity-70">روز</span>}
-                        <span className="font-mono text-[10px] text-slate-500">{score ? `${score}%` : ''}</span>
+                        <span className="font-mono text-[7px] sm:text-[9px] md:text-[10px] text-slate-500">{score ? `${score}%` : ''}</span>
                       </div>
 
                       <div className="flex-1 flex items-center justify-center">
-                        <div className="relative w-12 h-12 rounded-2xl border border-white/10 bg-slate-900/60 flex items-center justify-center text-white font-black text-lg shadow-inner">
+                        <div className="relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg sm:rounded-xl md:rounded-2xl border border-white/10 bg-slate-900/60 flex items-center justify-center text-white font-black text-sm sm:text-base md:text-lg shadow-inner">
                           {day.dayNum}
-                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-6 rounded-full blur-sm bg-white/20"></div>
+                          <div className="absolute -bottom-0.5 sm:-bottom-1 left-1/2 -translate-x-1/2 h-0.5 sm:h-1 w-4 sm:w-6 rounded-full blur-sm bg-white/20"></div>
                         </div>
                       </div>
 
-                      <div className="w-full flex items-center justify-between text-[10px] text-slate-400">
-                        <div className="flex items-center gap-1">
-                          {videos.length > 0 && <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>}
-                          {daysGrades.length > 0 && <span className="w-2 h-2 rounded-full bg-pink-400 shadow-[0_0_8px_#f472b6]"></span>}
-                          {dayGoals.length > 0 && <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]"></span>}
-                          {notes.length > 0 && <span className="w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_8px_#fbbf24]"></span>}
+                      <div className="w-full flex items-center justify-between text-[7px] sm:text-[9px] md:text-[10px] text-slate-400">
+                        <div className="flex items-center gap-0.5">
+                          {dayFuturePlans.length > 0 && <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-cyan-400 shadow-[0_0_4px_#22d3ee] sm:shadow-[0_0_6px_#22d3ee]"></span>}
+                          {daysGrades.length > 0 && <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-pink-400 shadow-[0_0_4px_#f472b6] sm:shadow-[0_0_6px_#f472b6]"></span>}
+                          {dayGoals.length > 0 && <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_#10b981] sm:shadow-[0_0_6px_#10b981]"></span>}
+                          {notes.length > 0 && <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-purple-400 shadow-[0_0_4px_#a78bfa] sm:shadow-[0_0_6px_#a78bfa]"></span>}
+                          {getDayStats(day.date).studyManagementAverageHours > 0 && <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-indigo-400 shadow-[0_0_4px_#6366f1] sm:shadow-[0_0_6px_#6366f1]"></span>}
+                          {getDayStats(day.date).englishCount > 0 && <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-orange-400 shadow-[0_0_4px_#f59e0b] sm:shadow-[0_0_6px_#f59e0b]"></span>}
                         </div>
-                        <span className="text-right text-slate-500">{day.isCurrentMonth ? '' : 'ماه دیگر'}</span>
+                        <span className="text-right text-slate-500 text-[7px] sm:text-[9px] md:text-[10px]">{day.isCurrentMonth ? '' : 'ماه دیگر'}</span>
                       </div>
                     </div>
                   </div>
@@ -786,14 +998,14 @@ export const CalendarSection: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                  <div className="grid grid-cols-3 gap-3 mt-4">
                     <div className="rounded-2xl border border-cyan-400/20 bg-white/5 p-3 flex flex-col gap-1">
                       <div className="flex items-center gap-2 text-[11px] text-cyan-200">
-                        <Play className="w-4 h-4" />
-                        ویدیوهای امروز
+                        <CalendarClock className="w-4 h-4" />
+                        برنامه‌های آینده
                       </div>
-                      <div className="text-2xl font-black text-white">{selectedDayStats.videoCount}</div>
-                      <div className="text-[11px] text-slate-400">تعداد ویدیو ثبت‌شده</div>
+                      <div className="text-2xl font-black text-white">{selectedDayStats.futurePlanCount}</div>
+                      <div className="text-[11px] text-slate-400">برنامه ثبت‌شده برای این روز</div>
                     </div>
                     <div className="rounded-2xl border border-pink-400/20 bg-white/5 p-3 flex flex-col gap-1">
                       <div className="flex items-center gap-2 text-[11px] text-pink-200">
@@ -818,6 +1030,22 @@ export const CalendarSection: React.FC = () => {
                       </div>
                       <div className="text-2xl font-black text-white">{selectedDayStats.noteCount || 0}</div>
                       <div className="text-[11px] text-slate-400">یادداشت ثبت‌شده برای این روز</div>
+                    </div>
+                    <div className="rounded-2xl border border-indigo-400/20 bg-white/5 p-3 flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-[11px] text-indigo-200">
+                        <Activity className="w-4 h-4" />
+                        مدیریت مطالعه
+                      </div>
+                      <div className="text-2xl font-black text-white">{selectedDayStats.studyManagementAverageHours?.toFixed(1) || '0.0'}</div>
+                      <div className="text-[11px] text-slate-400">میانگین ساعت مطالعه</div>
+                    </div>
+                    <div className="rounded-2xl border border-orange-400/20 bg-white/5 p-3 flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-[11px] text-orange-200">
+                        <Activity className="w-4 h-4" />
+                        زبان انگلیسی
+                      </div>
+                      <div className="text-2xl font-black text-white">{selectedDayStats.englishHours?.toFixed(1) || '0.0'}</div>
+                      <div className="text-[11px] text-slate-400">ساعت مطالعه</div>
                     </div>
                   </div>
                 </>
@@ -913,10 +1141,10 @@ export const CalendarSection: React.FC = () => {
           </div>
         </div>
 
-          <div className="rounded-2xl border border-amber-400/30 bg-slate-950/80 p-5 shadow-[0_18px_45px_-26px_rgba(251,191,36,0.35)] flex flex-col overflow-hidden min-h-[520px] max-h-[700px] w-full max-w-none xl:col-span-2">
+          <div className="rounded-2xl border border-purple-400/30 bg-slate-950/80 p-5 shadow-[0_18px_45px_-26px_rgba(168,85,247,0.35)] flex flex-col overflow-hidden min-h-[520px] max-h-[700px] w-full max-w-none xl:col-span-2">
           <div className="flex items-center justify-between text-white mb-3">
             <div className="flex items-center gap-2">
-              <NotebookPen className="w-5 h-5 text-amber-300" />
+              <NotebookPen className="w-5 h-5 text-purple-300" />
               <span className="font-bold text-sm">یادداشت‌های این روز</span>
             </div>
             <span className="text-xs text-slate-400">{selectedNotes.length} یادداشت</span>
@@ -930,11 +1158,11 @@ export const CalendarSection: React.FC = () => {
               selectedNotes.map(note => (
                 <div
                   key={note.id}
-                  className="flex items-start gap-2 p-4 rounded-xl border border-amber-400/30 bg-amber-500/5 text-amber-50 min-h-[112px] w-full"
+                  className="flex items-start gap-2 p-4 rounded-xl border border-purple-400/30 bg-purple-500/5 text-purple-50 min-h-[112px] w-full"
                 >
                   <div className="flex-1">
                     <div className="text-sm font-bold text-white leading-tight">{note.targetTitle}</div>
-                    <div className="text-[11px] text-amber-200/80">
+                    <div className="text-[11px] text-purple-200/80">
                       {note.targetType === 'habit' ? 'عادت' : note.targetType === 'task' ? 'کار' : 'هدف'}
                     </div>
                     <p className="text-xs text-slate-200 mt-1 leading-relaxed whitespace-pre-wrap break-words">{note.text}</p>

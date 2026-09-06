@@ -19,7 +19,6 @@ import {
   Trash,
   Trophy
 } from 'lucide-react';
-import { RangeProgressRow, RANGE_WINDOWS, RangeProgressItem, clampRangePercent } from './RangeProgressRow';
 import { chartCategoryClass } from './chartCategoryStyles';
 
 const SUBJECT_LABELS: Record<GradeSubject, string> = {
@@ -155,10 +154,10 @@ export const GradeTracker: React.FC = () => {
   );
 
   const gradeByDateSubject = useMemo(() => {
-    const map: Record<string, Record<GradeSubject, { score: number; idNum: number }>> = {};
+    const map: Record<string, Partial<Record<GradeSubject, { score: number; idNum: number }>>> = {};
     grades.forEach(g => {
       const iso = g.date;
-      if (!map[iso]) map[iso] = {};
+      if (!map[iso]) map[iso] = {} as Partial<Record<GradeSubject, { score: number; idNum: number }>>;
       const idNum = Number(g.id) || 0;
       const existing = map[iso][g.subject];
       if (!existing || idNum > existing.idNum) {
@@ -251,39 +250,40 @@ export const GradeTracker: React.FC = () => {
     background: `conic-gradient(#22d3ee ${avgProgress * 3.6}deg, rgba(148,163,184,0.25) ${avgProgress * 3.6}deg)`
   };
 
-  const rangeProgressItems: RangeProgressItem[] = useMemo(() => {
-    const dailyPercent = (iso: string) => {
-      const dayGrades = grades.filter(g => {
-        const matchesSubject = filterSubject === 'All' || g.subject === filterSubject;
-        return matchesSubject && g.date === iso;
-      });
-      if (dayGrades.length === 0) return 0;
-      const avg = dayGrades.reduce((sum, g) => sum + g.score, 0) / dayGrades.length;
-      return (avg / 20) * 100;
-    };
-
-    const averageWindow = (days: number, offset: number) => {
-      if (days <= 0) return 0;
-      let acc = 0;
-      for (let i = 0; i < days; i++) {
-        const iso = toISODate(getRelativeDate(-(i + offset), viewEndDate));
-        acc += dailyPercent(iso);
-      }
-      return acc / days;
-    };
-
-    return RANGE_WINDOWS.map(window => {
-      const currentAvg = averageWindow(window.days, 0);
-      const prevAvg = averageWindow(window.days, window.days);
-      return { ...window, value: clampRangePercent(currentAvg - prevAvg) };
-    });
-  }, [grades, filterSubject, viewEndDate]);
 
   const subjectStats = Object.values(GradeSubject).map(sub => {
-    const items = grades.filter(g => g.subject === sub);
+    const items = grades.filter(g => g.subject === sub).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const avg = items.length ? items.reduce((sum, g) => sum + g.score, 0) / items.length : 0;
     const best = items.length ? Math.max(...items.map(g => g.score)) : 0;
-    return { subject: sub, avg: +avg.toFixed(2), count: items.length, best };
+    
+    // Calculate progress compared to previous exam
+    let progressVsPrevious = 0;
+    if (items.length >= 2) {
+      const latest = items[items.length - 1].score;
+      const previous = items[items.length - 2].score;
+      progressVsPrevious = ((latest - previous) / 20) * 100;
+    }
+    
+    // Calculate progress compared to last 3 exams
+    let progressVsLast3 = 0;
+    if (items.length >= 4) {
+      const latest = items[items.length - 1].score;
+      const last3Avg = (items[items.length - 2].score + items[items.length - 3].score + items[items.length - 4].score) / 3;
+      progressVsLast3 = ((latest - last3Avg) / 20) * 100;
+    }
+    
+    // Overall progress (percentage of maximum score)
+    const overallProgress = avg > 0 ? (avg / 20) * 100 : 0;
+    
+    return { 
+      subject: sub, 
+      avg: +avg.toFixed(2), 
+      count: items.length, 
+      best,
+      progressVsPrevious: +progressVsPrevious.toFixed(2),
+      progressVsLast3: +progressVsLast3.toFixed(2),
+      overallProgress: +overallProgress.toFixed(2)
+    };
   });
 
   const topSubjects = subjectStats
@@ -302,8 +302,8 @@ export const GradeTracker: React.FC = () => {
   })();
 
   return (
-    <div className="space-y-8 animate-enter" dir="rtl">
-      <div className="relative overflow-hidden rounded-[32px] border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 md:p-8 shadow-[0_20px_70px_-30px_rgba(34,211,238,0.5)]">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8 animate-enter" dir="rtl">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl md:rounded-[32px] border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 sm:p-6 md:p-8 shadow-[0_20px_70px_-30px_rgba(34,211,238,0.5)]">
         <div className="absolute inset-0 opacity-50">
           <div className="absolute -left-14 -top-20 w-64 h-64 rounded-full bg-cyan-500/15 blur-[120px] animate-pulse"></div>
           <div className="absolute left-1/2 -bottom-10 w-80 h-80 rounded-full bg-emerald-500/10 blur-[140px] animate-float"></div>
@@ -311,62 +311,65 @@ export const GradeTracker: React.FC = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,211,238,0.18),transparent_25%),radial-gradient(circle_at_80%_0%,rgba(99,102,241,0.16),transparent_28%),radial-gradient(circle_at_50%_90%,rgba(16,185,129,0.18),transparent_30%)]"></div>
         </div>
 
-        <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900/70 border border-white/10 text-cyan-200 text-xs font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-              کارنامه تحصیلی | LIVE
+        <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6">
+          <div className="space-y-2 sm:space-y-3 flex-1 min-w-0">
+            <div className="inline-flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full bg-slate-900/70 border border-white/10 text-cyan-200 text-[10px] sm:text-xs font-mono">
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
+              <span className="hidden min-[400px]:inline">کارنامه تحصیلی | LIVE</span>
+              <span className="min-[400px]:hidden">LIVE</span>
             </div>
             <div className="flex items-center gap-2 text-white">
-              <GraduationCap className="w-7 h-7 text-cyan-300" />
-              <h2 className="text-3xl md:text-4xl font-black tracking-tight">مرکز کنترل نمرات</h2>
+              <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-cyan-300 flex-shrink-0" />
+              <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black tracking-tight">مرکز کنترل نمرات</h2>
             </div>
-            <p className="text-slate-200/80 text-sm md:text-base max-w-3xl leading-relaxed">
+            <p className="text-slate-200/80 text-xs sm:text-sm md:text-base max-w-3xl leading-relaxed">
               تحلیل زنده نمره‌ها، درس به درس. تمرکز روی ضعف‌ها، جشن گرفتن قوی‌ترین‌ها و ثبت سریع هر امتحان بدون
               حواس‌پرتی.
             </p>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 font-mono">
-              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1">
-                <BarChart3 className="w-3 h-3" />
-                {grades.length} رکورد فعال
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-slate-300 font-mono">
+              <span className="px-2 sm:px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1">
+                <BarChart3 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                <span className="hidden min-[400px]:inline">{grades.length} رکورد فعال</span>
+                <span className="min-[400px]:hidden">{grades.length}</span>
               </span>
-              <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-100 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
+              <span className="px-2 sm:px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-100 flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 {passRate}% نرخ قبولی
               </span>
-              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {formatPersianDate(currentDate)}
+              <span className="px-2 sm:px-3 py-1 rounded-full bg-white/5 border border-white/10 flex items-center gap-1">
+                <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                <span className="hidden sm:inline">{formatPersianDate(currentDate)}</span>
+                <span className="sm:hidden">{formatPersianDateShort(currentDate)}</span>
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-            <div className="relative w-36 h-36 md:w-40 md:h-40 rounded-full bg-slate-900/80 border border-white/10 flex items-center justify-center">
-              <div className="absolute inset-3 rounded-full" style={avgRingStyle}></div>
-              <div className="absolute inset-[18px] rounded-full bg-slate-950/80 border border-white/5 flex flex-col items-center justify-center text-white font-black">
-                <span className="text-3xl md:text-4xl">{avgScore.toFixed(1)}</span>
-                <span className="text-[10px] text-slate-400">میانگین کل</span>
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto">
+            <div className="relative w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36 lg:w-40 lg:h-40 rounded-full bg-slate-900/80 border border-white/10 flex items-center justify-center flex-shrink-0">
+              <div className="absolute inset-2 sm:inset-3 rounded-full" style={avgRingStyle}></div>
+              <div className="absolute inset-[14px] sm:inset-[18px] rounded-full bg-slate-950/80 border border-white/5 flex flex-col items-center justify-center text-white font-black">
+                <span className="text-xl sm:text-2xl md:text-3xl lg:text-4xl">{avgScore.toFixed(1)}</span>
+                <span className="text-[9px] sm:text-[10px] text-slate-400">میانگین کل</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 w-full sm:w-auto">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-white shadow-[0_10px_40px_-20px_rgba(34,211,238,0.6)]">
-                <div className="text-xs text-slate-400">بهترین نمره</div>
-                <div className="text-xl font-black flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-amber-300" />
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full sm:w-auto">
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-2 sm:p-3 text-white shadow-[0_10px_40px_-20px_rgba(34,211,238,0.6)]">
+                <div className="text-[10px] sm:text-xs text-slate-400">بهترین نمره</div>
+                <div className="text-lg sm:text-xl font-black flex items-center gap-1.5 sm:gap-2">
+                  <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 flex-shrink-0" />
                   {bestEntry ? bestEntry.score : '--'}
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-2">
                   {bestEntry ? `${SUBJECT_LABELS[bestEntry.subject]} | ${formatPersianDateShort(bestEntry.date)}` : 'منتظر رکورد'}
                 </div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-white shadow-[0_10px_40px_-20px_rgba(99,102,241,0.5)]">
-                <div className="text-xs text-slate-400">آخرین ثبت</div>
-                <div className="text-xl font-black flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-cyan-300" />
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-2 sm:p-3 text-white shadow-[0_10px_40px_-20px_rgba(99,102,241,0.5)]">
+                <div className="text-[10px] sm:text-xs text-slate-400">آخرین ثبت</div>
+                <div className="text-lg sm:text-xl font-black flex items-center gap-1.5 sm:gap-2">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-300 flex-shrink-0" />
                   {lastEntry ? lastEntry.score : '--'}
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-2">
                   {lastEntry ? `${SUBJECT_LABELS[lastEntry.subject]} • ${formatPersianDateShort(lastEntry.date)}` : 'هنوز داده‌ای نیست'}
                 </div>
               </div>
@@ -375,63 +378,186 @@ export const GradeTracker: React.FC = () => {
         </div>
       </div>
 
-      <RangeProgressRow
-        title="ریتم بازه‌ای نمره‌ها"
-        subtitle="میانگین درصد نمرات در بازه‌های ۳ روزه تا یک‌ساله"
-        items={rangeProgressItems}
-      />
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-950/70 p-4 sm:p-6 md:p-8">
+        <div className="absolute inset-0 opacity-40 pointer-events-none">
+          <div className="absolute -left-16 -top-14 w-56 h-56 bg-cyan-500/15 blur-[110px]"></div>
+          <div className="absolute right-0 bottom-0 w-64 h-64 bg-purple-500/15 blur-[120px]"></div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(34,211,238,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(168,85,247,0.08),transparent_30%),radial-gradient(circle_at_50%_80%,rgba(16,185,129,0.08),transparent_28%)]"></div>
+        </div>
 
-      <div className="space-y-6">
-        <div className="grid xl:grid-cols-[360px_1fr] gap-4">
-          <div className="space-y-4">
-            <div className="rounded-3xl border border-white/10 p-5 space-y-4 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-950/80 relative overflow-hidden shadow-[0_15px_50px_-25px_rgba(34,211,238,0.6)] h-full min-h-[420px] max-h-[520px]">
+        <div className="relative space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-cyan-400/20 to-purple-500/20 flex items-center justify-center border border-white/10 flex-shrink-0">
+                <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-300" />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-black text-white">پیشرفت درسی</h3>
+                <p className="text-[10px] sm:text-xs text-slate-400">مقایسه با امتحانات قبلی</p>
+              </div>
+            </div>
+            <div className="text-[10px] sm:text-xs text-slate-500">
+              {subjectStats.filter(s => s.count > 0).length} درس فعال
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            {subjectStats.filter(s => s.count > 0).map(stat => (
+              <div
+                key={stat.subject}
+                className="rounded-xl sm:rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm p-3 sm:p-4 space-y-3 sm:space-y-4 hover:border-white/20 hover:from-white/[0.07] hover:to-white/[0.03] transition-all group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+                    <div
+                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl text-slate-900 font-black flex items-center justify-center shadow-lg text-xs sm:text-sm group-hover:scale-105 transition-transform flex-shrink-0"
+                      style={{ background: SUBJECT_GRADIENTS[stat.subject] }}
+                    >
+                      {SUBJECT_LABELS[stat.subject].slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white font-bold text-xs sm:text-sm truncate">{SUBJECT_LABELS[stat.subject]}</div>
+                      <div className="text-[10px] sm:text-[11px] text-slate-500 flex items-center gap-1">
+                        <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                        {stat.count} آزمون
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-1 sm:gap-1.5 md:gap-2 py-1 sm:py-2 overflow-x-auto -mx-2 px-2">
+                  {/* Progress vs Previous */}
+                  <div className="flex flex-col items-center space-y-1 sm:space-y-1.5 flex-shrink-0 min-w-[60px] sm:min-w-[70px] md:min-w-0">
+                    <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 shrink-0">
+                      <div
+                        className="absolute inset-0 rounded-full border border-white/10"
+                        style={{
+                          background: `conic-gradient(${stat.progressVsPrevious >= 0 ? '#22c55e' : '#ef4444'} ${Math.abs(stat.progressVsPrevious) * 3.6}deg, rgba(148,163,184,0.18) ${Math.abs(stat.progressVsPrevious) * 3.6}deg)`
+                        }}
+                      ></div>
+                      <div className="absolute inset-[3px] sm:inset-[4px] md:inset-[5px] rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-white shadow-[0_6px_18px_rgba(0,0,0,0.45)]">
+                        <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${stat.progressVsPrevious >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
+                          {stat.progressVsPrevious > 0 ? '+' : ''}{Math.abs(stat.progressVsPrevious).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-[7px] sm:text-[8px] md:text-[9px] text-slate-400 text-center leading-tight px-0.5">بازه ۱ روز<br className="hidden sm:block"/>از آخرین آزمون</div>
+                  </div>
+
+                  {/* Progress vs Last 3 */}
+                  <div className="flex flex-col items-center space-y-1 sm:space-y-1.5 flex-shrink-0 min-w-[60px] sm:min-w-[70px] md:min-w-0">
+                    <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 shrink-0">
+                      <div
+                        className="absolute inset-0 rounded-full border border-white/10"
+                        style={{
+                          background: `conic-gradient(${stat.progressVsLast3 >= 0 ? '#22c55e' : '#ef4444'} ${Math.abs(stat.progressVsLast3) * 3.6}deg, rgba(148,163,184,0.18) ${Math.abs(stat.progressVsLast3) * 3.6}deg)`
+                        }}
+                      ></div>
+                      <div className="absolute inset-[3px] sm:inset-[4px] md:inset-[5px] rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-white shadow-[0_6px_18px_rgba(0,0,0,0.45)]">
+                        <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${stat.progressVsLast3 >= 0 ? 'text-emerald-200' : 'text-rose-200'}`}>
+                          {stat.progressVsLast3 > 0 ? '+' : ''}{Math.abs(stat.progressVsLast3).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-[7px] sm:text-[8px] md:text-[9px] text-slate-400 text-center leading-tight px-0.5">بازه ۳ روز<br className="hidden sm:block"/>از آخرین آزمون</div>
+                  </div>
+
+                  {/* Overall Progress */}
+                  <div className="flex flex-col items-center space-y-1 sm:space-y-1.5 flex-shrink-0 min-w-[60px] sm:min-w-[70px] md:min-w-0">
+                    <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 shrink-0">
+                      <div
+                        className="absolute inset-0 rounded-full border border-white/10"
+                        style={{
+                          background: `conic-gradient(#a855f7 ${stat.overallProgress * 3.6}deg, rgba(148,163,184,0.18) ${stat.overallProgress * 3.6}deg)`
+                        }}
+                      ></div>
+                      <div className="absolute inset-[3px] sm:inset-[4px] md:inset-[5px] rounded-full bg-slate-950/90 border border-white/10 flex flex-col items-center justify-center text-white shadow-[0_6px_18px_rgba(0,0,0,0.45)]">
+                        <span className="text-[9px] sm:text-[10px] md:text-xs font-black text-purple-200">
+                          {stat.overallProgress.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-[7px] sm:text-[8px] md:text-[9px] text-slate-400 text-center leading-tight px-0.5">میانگین کل<br className="hidden sm:block"/>تمام آزمون‌ها</div>
+                  </div>
+                </div>
+
+                <div className="pt-2 sm:pt-3 border-t border-white/5 flex items-center justify-between text-[10px] sm:text-xs">
+                  <span className="text-slate-500">میانگین</span>
+                  <span className={`font-black ${getScoreTone(stat.avg)}`}>{stat.avg.toFixed(1)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {subjectStats.filter(s => s.count > 0).length === 0 && (
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-8 sm:p-12 text-center">
+              <div className="flex justify-center mb-3 sm:mb-4">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center border border-white/10">
+                  <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-slate-400" />
+                </div>
+              </div>
+              <p className="text-slate-300 font-bold mb-2 text-sm sm:text-base">هنوز نمره‌ای ثبت نشده است</p>
+              <p className="text-[10px] sm:text-xs text-slate-500">برای مشاهده پیشرفت، حداقل یک نمره برای هر درس ثبت کنید</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 sm:space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr] gap-3 sm:gap-4">
+          {/* ستون چپ - فرم ثبت و برترین درس‌ها */}
+          <div className="space-y-3 sm:space-y-4 order-1 lg:order-1">
+            {/* فرم ثبت نمره */}
+            <div className="rounded-2xl sm:rounded-3xl border border-white/10 p-4 sm:p-5 space-y-3 sm:space-y-4 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-950/80 relative overflow-hidden shadow-[0_15px_50px_-25px_rgba(34,211,238,0.6)] min-h-[380px] sm:min-h-[420px] max-h-[520px]">
               <div className="absolute inset-0 opacity-40">
                 <div className="absolute -left-10 -top-10 w-40 h-40 bg-cyan-500/15 rounded-full blur-[90px]"></div>
                 <div className="absolute right-0 bottom-0 w-48 h-48 bg-emerald-500/15 rounded-full blur-[100px]"></div>
                 <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
               </div>
-              <div className="relative flex items-center justify-between">
+              <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="flex items-center gap-2 text-white">
-                  <PlusCircle className="w-5 h-5 text-cyan-300" />
+                  <PlusCircle className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-300 flex-shrink-0" />
                   <div>
-                    <div className="text-sm text-slate-400">ثبت نمره جدید</div>
-                    <div className="text-xl font-black">افزودن فوری</div>
+                    <div className="text-xs sm:text-sm text-slate-400">ثبت نمره جدید</div>
+                    <div className="text-lg sm:text-xl font-black">افزودن فوری</div>
                   </div>
                 </div>
-                <div className="text-xs text-slate-400 flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-                  <Flame className="w-4 h-4 text-amber-300" />
-                  {todayCount} ثبت در تاریخ انتخابی
+                <div className="text-[10px] sm:text-xs text-slate-400 flex items-center gap-1.5 sm:gap-2 bg-white/5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-white/10">
+                  <Flame className="w-3 h-3 sm:w-4 sm:h-4 text-amber-300 flex-shrink-0" />
+                  <span className="whitespace-nowrap">{todayCount} ثبت در تاریخ انتخابی</span>
                 </div>
               </div>
 
-              <div className="relative rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+              <div className="relative rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 p-2 sm:p-3 text-xs sm:text-sm text-slate-300 grid grid-cols-[auto_1fr_auto] items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => changeDate(1)}
-                  className="min-w-[90px] px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:border-cyan-400/50 transition-all flex items-center justify-center gap-1 text-xs"
+                  className="min-w-[70px] sm:min-w-[90px] px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:border-cyan-400/50 transition-all flex items-center justify-center gap-1 text-[10px] sm:text-xs"
                 >
-                  <ArrowRight className="w-4 h-4" />
-                  روز بعد
+                  <ArrowRight className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">روز بعد</span>
+                  <span className="sm:hidden">بعد</span>
                 </button>
-                <div className="flex items-center justify-center gap-2 text-cyan-100 font-bold text-center px-2">
-                  <Calendar className="w-4 h-4" />
-                  <span className="block leading-relaxed">{formatPersianDate(currentDate)}</span>
+                <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-cyan-100 font-bold text-center px-1 sm:px-2 min-w-0">
+                  <Calendar className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="block leading-relaxed text-[10px] sm:text-xs md:text-sm truncate">{formatPersianDate(currentDate)}</span>
                 </div>
                 <button
                   onClick={() => changeDate(-1)}
-                  className="min-w-[90px] px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:border-cyan-400/50 transition-all flex items-center justify-center gap-1 text-xs"
+                  className="min-w-[70px] sm:min-w-[90px] px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:border-cyan-400/50 transition-all flex items-center justify-center gap-1 text-[10px] sm:text-xs"
                 >
-                  <ArrowLeft className="w-4 h-4" />
-                  روز قبل
+                  <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">روز قبل</span>
+                  <span className="sm:hidden">قبل</span>
                 </button>
               </div>
 
-              <div className="relative space-y-3">
+              <div className="relative space-y-2.5 sm:space-y-3">
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1 font-bold">درس</label>
+                  <label className="block text-[10px] sm:text-xs text-slate-400 mb-1 font-bold">درس</label>
                   <select
                     value={newSubject}
                     onChange={e => setNewSubject(e.target.value as GradeSubject)}
-                    className="w-full rounded-xl px-4 py-3 bg-slate-950/80 border border-white/10 text-white outline-none"
+                    className="w-full rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 bg-slate-950/80 border border-white/10 text-white outline-none text-sm"
                   >
                     {Object.values(GradeSubject).map(s => (
                       <option key={s} value={s}>
@@ -441,7 +567,7 @@ export const GradeTracker: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1 font-bold">نمره (۰ تا ۲۰)</label>
+                  <label className="block text-[10px] sm:text-xs text-slate-400 mb-1 font-bold">نمره (۰ تا ۲۰)</label>
                   <input
                     type="number"
                     step="0.25"
@@ -449,15 +575,15 @@ export const GradeTracker: React.FC = () => {
                     max="20"
                     value={newScore}
                     onChange={e => setNewScore(e.target.value)}
-                    className="w-full rounded-xl px-4 py-3 bg-slate-950/80 border border-white/10 text-white outline-none font-mono"
+                    className="w-full rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 bg-slate-950/80 border border-white/10 text-white outline-none font-mono text-sm"
                     placeholder="مثلاً ۱۸.۵۰"
                   />
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <div className="mt-1.5 sm:mt-2 flex flex-wrap gap-1.5 sm:gap-2 text-[10px] sm:text-xs">
                     {[20, 19, 18, 17, 16].map(val => (
                       <button
                         key={val}
                         onClick={() => setNewScore(val.toString())}
-                        className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:border-cyan-400/40 transition"
+                        className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-200 hover:border-cyan-400/40 transition"
                       >
                         {val}
                       </button>
@@ -465,12 +591,12 @@ export const GradeTracker: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                <div className="rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3">
+                  <div className="flex items-center justify-between text-[10px] sm:text-xs text-slate-400 mb-1.5 sm:mb-2">
                     <span>پیش‌نمایش نمره</span>
                     <span className={`font-black ${getScoreTone(scorePreview)}`}>{scorePreview.toFixed(1)}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden">
+                  <div className="h-1.5 sm:h-2 rounded-full bg-slate-800/80 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-300"
                       style={{
@@ -483,159 +609,169 @@ export const GradeTracker: React.FC = () => {
 
                 <button
                   onClick={addGrade}
-                  className="w-full bg-gradient-to-l from-cyan-400 to-emerald-400 text-slate-900 font-bold py-3 rounded-xl transition flex justify-center items-center gap-2 shadow-[0_0_30px_rgba(34,211,238,0.35)] hover:shadow-[0_0_40px_rgba(16,185,129,0.45)]"
+                  className="w-full bg-gradient-to-l from-cyan-400 to-emerald-400 text-slate-900 font-bold py-2.5 sm:py-3 rounded-lg sm:rounded-xl transition flex justify-center items-center gap-2 text-sm shadow-[0_0_30px_rgba(34,211,238,0.35)] hover:shadow-[0_0_40px_rgba(16,185,129,0.45)]"
                 >
-                  <CheckCircle2 className="w-5 h-5" />
-                  ذخیره در کارنامه
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="hidden sm:inline">ذخیره در کارنامه</span>
+                  <span className="sm:hidden">ذخیره</span>
                 </button>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 space-y-3 flex-1 min-h-[340px] max-h-[520px] overflow-hidden">
+            {/* برترین درس‌ها */}
+            <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 p-3 sm:p-4 space-y-2 sm:space-y-3 min-h-[300px] sm:min-h-[340px] max-h-[520px] overflow-hidden">
               <div className="flex items-center justify-between text-white font-bold">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-emerald-300" />
-                  برترین درس‌ها
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300 flex-shrink-0" />
+                  <span className="text-sm sm:text-base">برترین درس‌ها</span>
                 </div>
-                <div className="text-xs text-slate-500">میانگین بالا</div>
+                <div className="text-[10px] sm:text-xs text-slate-500">میانگین بالا</div>
               </div>
-              <div className="space-y-2 h-full overflow-y-auto custom-scrollbar pr-1">
-                {topSubjects.length === 0 && <div className="text-slate-500 text-sm">منتظر اولین ثبت...</div>}
-                {topSubjects.map(stat => (
-                  <div key={stat.subject} className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="w-9 h-9 rounded-lg text-slate-900 font-black flex items-center justify-center shadow"
-                        style={{ background: SUBJECT_GRADIENTS[stat.subject] }}
-                      >
-                        {SUBJECT_LABELS[stat.subject].slice(0, 2)}
-                      </span>
-                      <div>
-                        <div className="text-white text-sm font-bold">{SUBJECT_LABELS[stat.subject]}</div>
-                        <div className="text-[11px] text-slate-400">{stat.count} آزمون | بیشترین {stat.best}</div>
-                      </div>
+            <div className="space-y-1.5 sm:space-y-2 h-full overflow-y-auto custom-scrollbar pr-1">
+              {topSubjects.length === 0 && <div className="text-slate-500 text-xs sm:text-sm">منتظر اولین ثبت...</div>}
+              {topSubjects.map(stat => (
+                <div key={stat.subject} className="flex items-center justify-between rounded-lg sm:rounded-xl bg-white/5 border border-white/10 px-2 sm:px-3 py-1.5 sm:py-2">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                    <span
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg text-slate-900 font-black flex items-center justify-center shadow flex-shrink-0 text-xs sm:text-sm"
+                      style={{ background: SUBJECT_GRADIENTS[stat.subject] }}
+                    >
+                      {SUBJECT_LABELS[stat.subject].slice(0, 2)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-white text-xs sm:text-sm font-bold truncate">{SUBJECT_LABELS[stat.subject]}</div>
+                      <div className="text-[10px] sm:text-[11px] text-slate-400">{stat.count} آزمون | بیشترین {stat.best}</div>
                     </div>
-                    <div className={`text-sm font-black ${getScoreTone(stat.avg)}`}>{stat.avg.toFixed(1)}</div>
                   </div>
-                ))}
+                  <div className={`text-xs sm:text-sm font-black ${getScoreTone(stat.avg)} flex-shrink-0`}>{stat.avg.toFixed(1)}</div>
+                </div>
+              ))}
               </div>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="rounded-3xl border border-white/10 bg-slate-950/70 overflow-hidden h-full min-h-[420px] max-h-[520px] flex flex-col">
-              <div className="flex items-center justify-between px-5 py-4 shrink-0">
-                <div className="flex items-center gap-2 text-white font-bold">
-                  <BarChart3 className="w-5 h-5 text-cyan-300" />
-                  آرشیو نمرات
+          {/* ستون راست - آرشیو و آخرین ثبت‌ها */}
+          <div className="space-y-3 sm:space-y-4 order-2 lg:order-2">
+            {/* آرشیو نمرات */}
+            <div className="rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-950/70 overflow-hidden min-h-[300px] sm:min-h-[380px] md:min-h-[420px] max-h-[520px] flex flex-col">
+              <div className="flex items-center justify-between px-3 sm:px-4 md:px-5 py-3 sm:py-4 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 text-white font-bold">
+                  <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-300 flex-shrink-0" />
+                  <span className="text-sm sm:text-base">آرشیو نمرات</span>
                 </div>
-                <div className="text-xs text-slate-500">۱۰ مورد آخر</div>
+                <div className="text-[10px] sm:text-xs text-slate-500">۱۰ مورد آخر</div>
               </div>
 
               <div
                 className="divide-y divide-white/5 overflow-y-auto overflow-x-auto custom-scrollbar px-0"
                 style={{ maxHeight: 'calc(100% - 64px)' }}
               >
-                {grades.length === 0 && <div className="p-6 text-center text-slate-500 text-sm">هیچ نمره‌ای ثبت نشده است.</div>}
-                {[...grades]
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .slice(0, 10)
-                  .map(entry => (
-                    <div
-                      key={entry.id}
-                      className="grid grid-cols-[1.6fr_1.1fr_auto_auto_auto] items-center px-5 py-3 gap-2 sm:gap-3 hover:bg-white/5 transition min-w-[480px] sm:min-w-0"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-10 h-10 rounded-lg text-slate-900 font-black flex items-center justify-center shadow"
-                          style={{ background: SUBJECT_GRADIENTS[entry.subject] }}
-                        >
-                          {SUBJECT_LABELS[entry.subject].slice(0, 2)}
-                        </span>
-                        <div className="text-white font-bold text-sm sm:text-base truncate">{SUBJECT_LABELS[entry.subject]}</div>
+                {grades.length === 0 && <div className="p-4 sm:p-6 text-center text-slate-500 text-xs sm:text-sm">هیچ نمره‌ای ثبت نشده است.</div>}
+                <div className="min-w-[500px] sm:min-w-0">
+                  {[...grades]
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .slice(0, 10)
+                    .map(entry => (
+                      <div
+                        key={entry.id}
+                        className="grid grid-cols-[auto_1fr_auto_auto] sm:grid-cols-[1.6fr_1.1fr_auto_auto_auto] items-center px-3 sm:px-4 md:px-5 py-2 sm:py-3 gap-1.5 sm:gap-2 md:gap-3 hover:bg-white/5 transition"
+                      >
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 col-span-2 sm:col-span-1">
+                          <span
+                            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg text-slate-900 font-black flex items-center justify-center shadow flex-shrink-0 text-xs sm:text-sm"
+                            style={{ background: SUBJECT_GRADIENTS[entry.subject] }}
+                          >
+                            {SUBJECT_LABELS[entry.subject].slice(0, 2)}
+                          </span>
+                          <div className="text-white font-bold text-xs sm:text-sm md:text-base truncate min-w-0">{SUBJECT_LABELS[entry.subject]}</div>
+                        </div>
+                        <div className="text-[10px] sm:text-xs md:text-sm text-slate-300 font-mono whitespace-nowrap hidden sm:block">{formatPersianDateShort(entry.date)}</div>
+                        <div className={`text-xs sm:text-sm font-black ${getScoreTone(entry.score)} whitespace-nowrap`}>{entry.score}</div>
+                        <div className="text-[10px] sm:text-xs md:text-sm text-slate-400 md:text-center whitespace-nowrap hidden md:block">کد: {entry.id.slice(-6)}</div>
+                        <div className="flex justify-end whitespace-nowrap col-span-2 sm:col-span-1 sm:col-start-auto">
+                          <div className="flex items-center gap-2 sm:gap-1 w-full sm:w-auto justify-between sm:justify-end">
+                            <div className="text-[10px] sm:text-xs text-slate-400 sm:hidden">{formatPersianDateShort(entry.date)}</div>
+                            <button onClick={() => deleteGrade(entry.id)} className="text-slate-500 hover:text-red-400 transition flex items-center gap-1 text-xs sm:text-sm">
+                              <Trash className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <span className="hidden sm:inline">حذف</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs sm:text-sm text-slate-300 font-mono whitespace-nowrap">{formatPersianDate(entry.date)}</div>
-                      <div className={`text-xs sm:text-sm font-black ${getScoreTone(entry.score)}`}>{entry.score}</div>
-                      <div className="text-xs sm:text-sm text-slate-400 md:text-center whitespace-nowrap">کد: {entry.id.slice(-6)}</div>
-                      <div className="flex justify-end whitespace-nowrap">
-                        <button onClick={() => deleteGrade(entry.id)} className="text-slate-500 hover:text-red-400 transition flex items-center gap-1">
-                          <Trash className="w-4 h-4" />
-                          حذف
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                </div>
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+            {/* آخرین ثبت‌ها و تابلو درسی */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 p-3 sm:p-4 space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between text-white font-bold">
-                  <div className="flex items-center gap-2">
-                    <NotebookPen className="w-4 h-4 text-cyan-300" />
-                    آخرین ثبت‌ها
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <NotebookPen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-300 flex-shrink-0" />
+                    <span className="text-sm sm:text-base">آخرین ثبت‌ها</span>
                   </div>
-                  <div className="text-xs text-slate-500">{grades.length} رکورد</div>
+                  <div className="text-[10px] sm:text-xs text-slate-500">{grades.length} رکورد</div>
                 </div>
-                <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                  {recentEntries.length === 0 && <div className="text-slate-500 text-sm">چیزی ثبت نشده است.</div>}
-                  {recentEntries.map(entry => (
-                    <div key={entry.id} className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 px-3 py-2">
-                      <div
-                        className="w-11 h-11 rounded-xl flex items-center justify-center text-slate-900 font-black shadow-lg shrink-0"
-                        style={{ background: SUBJECT_GRADIENTS[entry.subject] }}
-                      >
-                        {entry.score.toFixed(1)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-bold">{SUBJECT_LABELS[entry.subject]}</div>
-                        <div className="text-xs text-slate-500 flex items-center gap-2">
-                          <Calendar className="w-3 h-3" />
-                          {formatPersianDateShort(entry.date)}
-                        </div>
-                      </div>
-                      <div className={`text-xs font-black ${getScoreTone(entry.score)}`}>{entry.score}</div>
+                <div className="space-y-1.5 sm:space-y-2 max-h-[240px] sm:max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                {recentEntries.length === 0 && <div className="text-slate-500 text-xs sm:text-sm">چیزی ثبت نشده است.</div>}
+                {recentEntries.map(entry => (
+                  <div key={entry.id} className="flex items-center gap-2 sm:gap-3 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 px-2 sm:px-3 py-1.5 sm:py-2">
+                    <div
+                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center text-slate-900 font-black shadow-lg shrink-0 text-xs sm:text-sm"
+                      style={{ background: SUBJECT_GRADIENTS[entry.subject] }}
+                    >
+                      {entry.score.toFixed(1)}
                     </div>
-                  ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-xs sm:text-sm font-bold truncate">{SUBJECT_LABELS[entry.subject]}</div>
+                      <div className="text-[10px] sm:text-xs text-slate-500 flex items-center gap-1.5 sm:gap-2">
+                        <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                        {formatPersianDateShort(entry.date)}
+                      </div>
+                    </div>
+                    <div className={`text-xs font-black ${getScoreTone(entry.score)} flex-shrink-0`}>{entry.score}</div>
+                  </div>
+                ))}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+              <div className="rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 p-3 sm:p-4">
                 <div className="flex items-center justify-between text-white font-bold mb-2">
-                  <div className="flex items-center gap-2">
-                    <Star className="w-4 h-4 text-amber-300" />
-                    تابلو درسی
-                  </div>
-                  <div className="text-xs text-slate-500">میانگین/بهترین</div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Star className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300 flex-shrink-0" />
+                  <span className="text-sm sm:text-base">تابلو درسی</span>
                 </div>
-                <div className="space-y-3 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
-                  {subjectStats.map(stat => (
-                    <div key={stat.subject} className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="w-10 h-10 rounded-lg text-slate-900 font-black flex items-center justify-center shadow-md shrink-0"
-                            style={{ background: SUBJECT_GRADIENTS[stat.subject] }}
-                          >
-                            {SUBJECT_LABELS[stat.subject].slice(0, 2)}
-                          </span>
-                          <div>
-                            <div className="text-white text-sm font-bold">{SUBJECT_LABELS[stat.subject]}</div>
-                            <div className="text-[11px] text-slate-400">
-                              {stat.best > 0 ? `بیشترین: ${stat.best}` : 'ثبت نشده'} | {stat.count} آزمون
-                            </div>
+                  <div className="text-[10px] sm:text-xs text-slate-500">میانگین/بهترین</div>
+                </div>
+                <div className="space-y-2 sm:space-y-3 max-h-[240px] sm:max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
+                {subjectStats.map(stat => (
+                  <div key={stat.subject} className="rounded-lg sm:rounded-xl border border-white/10 bg-white/5 p-2 sm:p-3 space-y-1.5 sm:space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
+                        <span
+                          className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg text-slate-900 font-black flex items-center justify-center shadow-md shrink-0 text-xs sm:text-sm"
+                          style={{ background: SUBJECT_GRADIENTS[stat.subject] }}
+                        >
+                          {SUBJECT_LABELS[stat.subject].slice(0, 2)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-white text-xs sm:text-sm font-bold truncate">{SUBJECT_LABELS[stat.subject]}</div>
+                          <div className="text-[10px] sm:text-[11px] text-slate-400">
+                            {stat.best > 0 ? `بیشترین: ${stat.best}` : 'ثبت نشده'} | {stat.count} آزمون
                           </div>
                         </div>
-                        <div className={`text-sm font-black ${getScoreTone(stat.avg)}`}>{stat.avg.toFixed(1)}</div>
                       </div>
-                      <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${Math.min(100, (stat.avg / 20) * 100)}%`, background: SUBJECT_GRADIENTS[stat.subject] }}
-                        ></div>
-                      </div>
+                      <div className={`text-xs sm:text-sm font-black ${getScoreTone(stat.avg)} flex-shrink-0`}>{stat.avg.toFixed(1)}</div>
                     </div>
-                  ))}
+                    <div className="h-1.5 sm:h-2 rounded-full bg-slate-800/80 overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${Math.min(100, (stat.avg / 20) * 100)}%`, background: SUBJECT_GRADIENTS[stat.subject] }}
+                      ></div>
+                    </div>
+                  </div>
+                ))}
                 </div>
               </div>
             </div>
@@ -643,28 +779,29 @@ export const GradeTracker: React.FC = () => {
         </div>
       </div>
 
-      <div className="relative rounded-3xl border border-white/10 bg-slate-950/70 p-5 md:p-6 space-y-4 overflow-hidden">
+      {/* نمودار - همیشه آخر */}
+      <div className="relative rounded-2xl sm:rounded-3xl border border-white/10 bg-slate-950/70 p-4 sm:p-5 md:p-6 space-y-3 sm:space-y-4 overflow-hidden">
         <div className="absolute inset-0 opacity-40 pointer-events-none">
           <div className="absolute -left-16 -top-14 w-56 h-56 bg-cyan-500/15 blur-[110px]"></div>
           <div className="absolute right-0 bottom-0 w-64 h-64 bg-purple-500/15 blur-[120px]"></div>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(34,211,238,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(168,85,247,0.08),transparent_30%),radial-gradient(circle_at_50%_80%,rgba(16,185,129,0.08),transparent_28%)]"></div>
         </div>
 
-          <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div>
-              <div className="text-sm text-cyan-200 flex items-center gap-2">
-                <Activity className="w-5 h-5" />
-                منحنی رشد نمرات
+        <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-2 sm:gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs sm:text-sm text-cyan-200 flex items-center gap-1.5 sm:gap-2">
+                <Activity className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span>منحنی رشد نمرات</span>
               </div>
-              <div className="text-xl font-black text-white flex items-center gap-2">
-                <Target className="w-5 h-5 text-emerald-300" />
-                روند {filterSubject === 'All' ? 'همه درس‌ها' : SUBJECT_LABELS[filterSubject]}
+              <div className="text-lg sm:text-xl font-black text-white flex items-center gap-1.5 sm:gap-2">
+                <Target className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300 flex-shrink-0" />
+                <span className="truncate">روند {filterSubject === 'All' ? 'همه درس‌ها' : SUBJECT_LABELS[filterSubject]}</span>
               </div>
-              <div className="text-xs text-slate-400 mt-1">
+              <div className="text-[10px] sm:text-xs text-slate-400 mt-1">
                 میانگین فیلتر: {filteredAvg.toFixed(1)} | بهترین: {filteredBest || '--'}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 bg-white/5 border border-white/10 rounded-xl p-1">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 bg-white/5 border border-white/10 rounded-lg sm:rounded-xl p-1 overflow-x-auto">
               {CHART_RANGES.map(r => {
                 const label =
                   r === 365 ? '۱ سال' : r === 730 ? '۲ سال' : `${r.toLocaleString('fa-IR')} روز`;
@@ -675,7 +812,7 @@ export const GradeTracker: React.FC = () => {
                       setChartRangeDays(r);
                       setViewEndDate(new Date());
                     }}
-                    className={chartCategoryClass(chartRangeDays === r)}
+                    className={`${chartCategoryClass(chartRangeDays === r)} text-[10px] sm:text-xs px-2 sm:px-3 py-1 whitespace-nowrap flex-shrink-0`}
                   >
                     {label}
                   </button>
@@ -684,10 +821,10 @@ export const GradeTracker: React.FC = () => {
             </div>
         </div>
 
-        <div className="relative flex flex-wrap gap-2">
+        <div className="relative flex flex-wrap gap-1.5 sm:gap-2 overflow-x-auto pb-2 -mx-1 px-1">
           <button
             onClick={() => setFilterSubject('All')}
-            className={chartCategoryClass(filterSubject === 'All')}
+            className={`${chartCategoryClass(filterSubject === 'All')} text-[10px] sm:text-xs px-2 sm:px-3 py-1 whitespace-nowrap flex-shrink-0`}
           >
             همه
           </button>
@@ -695,7 +832,7 @@ export const GradeTracker: React.FC = () => {
             <button
               key={sub}
               onClick={() => setFilterSubject(sub)}
-              className={chartCategoryClass(filterSubject === sub)}
+              className={`${chartCategoryClass(filterSubject === sub)} text-[10px] sm:text-xs px-2 sm:px-3 py-1 whitespace-nowrap flex-shrink-0`}
               style={filterSubject === sub ? { background: SUBJECT_GRADIENTS[sub] } : {}}
             >
               {SUBJECT_LABELS[sub]}
@@ -703,15 +840,15 @@ export const GradeTracker: React.FC = () => {
           ))}
         </div>
 
-        <div className="grid lg:grid-cols-[1fr,260px] gap-4">
-          <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md h-[320px] md:h-[400px] p-2 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr,240px] xl:grid-cols-[1fr,260px] gap-3 sm:gap-4">
+          <div className="relative rounded-xl sm:rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md h-[280px] sm:h-[320px] md:h-[400px] p-2 overflow-hidden order-2 lg:order-1">
             <div className="pointer-events-none absolute inset-0 opacity-70">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,211,238,0.08),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(16,185,129,0.08),transparent_35%),radial-gradient(circle_at_50%_80%,rgba(99,102,241,0.08),transparent_35%)]"></div>
               <div className="absolute -left-10 -top-12 w-48 h-48 bg-cyan-400/10 blur-3xl"></div>
               <div className="absolute right-0 bottom-0 w-56 h-56 bg-emerald-400/10 blur-3xl"></div>
             </div>
             {chartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs sm:text-sm px-4 text-center">
                 هنوز نموداری برای نمایش نداریم. یک نمره جدید ثبت کن.
               </div>
             ) : (
@@ -815,13 +952,13 @@ export const GradeTracker: React.FC = () => {
             <div className="absolute inset-0 pointer-events-none bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light"></div>
           </div>
 
-          <div className="relative rounded-2xl border border-white/10 bg-slate-900/60 p-4 space-y-3 text-white backdrop-blur">
+          <div className="relative rounded-xl sm:rounded-2xl border border-white/10 bg-slate-900/60 p-3 sm:p-4 space-y-2 sm:space-y-3 text-white backdrop-blur order-1 lg:order-2">
             <div>
-              <p className="text-xs text-cyan-200">روند</p>
-              <h4 className="text-lg font-bold">
+              <p className="text-[10px] sm:text-xs text-cyan-200">روند</p>
+              <h4 className="text-base sm:text-lg font-bold truncate">
                 {filterSubject === 'All' ? 'همه درس‌ها' : SUBJECT_LABELS[filterSubject]}
               </h4>
-              <p className="text-[11px] text-slate-300">
+              <p className="text-[10px] sm:text-[11px] text-slate-300">
                 فیلتر زمانی:{" "}
                 {chartRangeDays === 365
                   ? '۱ سال'
@@ -830,27 +967,27 @@ export const GradeTracker: React.FC = () => {
                   : `${chartRangeDays.toLocaleString('fa-IR')} روز`}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-xl bg-slate-900/50 border border-white/10 p-3">
-                <div className="text-xs text-slate-400">میانگین بازه</div>
-                <div className="text-xl font-black">{filteredAvg.toFixed(1)}</div>
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-xs sm:text-sm">
+              <div className="rounded-lg sm:rounded-xl bg-slate-900/50 border border-white/10 p-2 sm:p-3">
+                <div className="text-[10px] sm:text-xs text-slate-400">میانگین بازه</div>
+                <div className="text-lg sm:text-xl font-black">{filteredAvg.toFixed(1)}</div>
               </div>
-              <div className="rounded-xl bg-slate-900/50 border border-white/10 p-3">
-                <div className="text-xs text-slate-400">بهترین نمره</div>
-                <div className="text-xl font-black">{filteredBest || '--'}</div>
+              <div className="rounded-lg sm:rounded-xl bg-slate-900/50 border border-white/10 p-2 sm:p-3">
+                <div className="text-[10px] sm:text-xs text-slate-400">بهترین نمره</div>
+                <div className="text-lg sm:text-xl font-black">{filteredBest || '--'}</div>
               </div>
-              <div className="rounded-xl bg-slate-900/50 border border-white/10 p-3">
-                <div className="text-xs text-slate-400">تعداد آزمون</div>
-                <div className="text-xl font-black">{filteredGrades.length}</div>
+              <div className="rounded-lg sm:rounded-xl bg-slate-900/50 border border-white/10 p-2 sm:p-3">
+                <div className="text-[10px] sm:text-xs text-slate-400">تعداد آزمون</div>
+                <div className="text-lg sm:text-xl font-black">{filteredGrades.length}</div>
               </div>
-              <div className="rounded-xl bg-slate-900/50 border border-white/10 p-3">
-                <div className="text-xs text-slate-400">وضعیت قبولی</div>
-                <div className="text-xl font-black text-emerald-300">
+              <div className="rounded-lg sm:rounded-xl bg-slate-900/50 border border-white/10 p-2 sm:p-3">
+                <div className="text-[10px] sm:text-xs text-slate-400">وضعیت قبولی</div>
+                <div className="text-lg sm:text-xl font-black text-emerald-300">
                   {filteredGrades.length ? `${filteredPassCount}/${filteredGrades.length}` : '--'}
                 </div>
               </div>
             </div>
-            <div className="rounded-xl bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-blue-500/15 border border-white/10 p-3 text-xs text-slate-200">
+            <div className="rounded-lg sm:rounded-xl bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-blue-500/15 border border-white/10 p-2 sm:p-3 text-[10px] sm:text-xs text-slate-200">
               نوارهای راهنما: خط سبز ۱۷، خط نارنجی ۱۰. تلاش کن میانگین را بالاتر از ۱۷ نگه داری.
             </div>
           </div>
@@ -858,8 +995,8 @@ export const GradeTracker: React.FC = () => {
       </div>
 
       {saveSuccess && (
-        <div className="fixed bottom-6 left-6 z-50 px-4 py-3 rounded-2xl bg-emerald-500 text-slate-900 font-bold shadow-[0_20px_40px_-20px_rgba(16,185,129,0.9)] flex items-center gap-2 animate-enter">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-50 px-3 sm:px-4 py-2 sm:py-3 rounded-xl sm:rounded-2xl bg-emerald-500 text-slate-900 font-bold shadow-[0_20px_40px_-20px_rgba(16,185,129,0.9)] flex items-center gap-1.5 sm:gap-2 animate-enter text-sm sm:text-base">
+          <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           ذخیره شد
         </div>
       )}

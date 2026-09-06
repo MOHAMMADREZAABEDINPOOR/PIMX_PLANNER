@@ -23,3 +23,14 @@ server/planner.db
 *.njsproj
 *.sln
 *.sw?
+
+# Databases & local data
+db-data/
+*.sqlite3
+*.db
+*.db-journal
+.env
+.env.local
+temp.txt
+*_temp.tsx
+assets/c__*

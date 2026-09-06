@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "api": "node server/index.cjs"
+    "api": "cross-env PG_CONNECTION_STRING=postgres://postgres:12345678fgh@localhost:5433/planner PORT=4000 node server/index.cjs",
+    "start": "concurrently \"npm run api\" \"npm run dev\"",
+    "start:db": "scripts\\start-db.bat",
+    "stop:db": "scripts\\stop-db.bat",
+    "start:all": "npm run start:db && timeout /t 3 /nobreak > nul && npm run start"
   },
   "dependencies": {
     "@google/genai": "latest",
@@ -22,6 +26,9 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "baseline-browser-mapping": "^2.11.9",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Activity, Calendar, CheckCircle2, Flame, Gauge, Sparkles, Target, TrendingDown, TrendingUp } from 'lucide-react';
-import { DailyPlan, Goal } from '../types';
+import { DailyPlan, Goal, StudyLog, StudySubject } from '../types';
 import { getRelativeDate, storage, toISODate, toPersianDate } from '../utils';
 import { RangeProgressRow, RANGE_WINDOWS, RangeProgressItem, clampRangePercent } from './RangeProgressRow';
 
@@ -65,13 +65,18 @@ const formatRangeLabel = (value: number) => {
 export const ProgressSection: React.FC = () => {
   const [plans, setPlans] = useState<Record<string, DailyPlan>>({});
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [studyLogs, setStudyLogs] = useState<StudyLog[]>([]);
   const [chartRange, setChartRange] = useState<number>(21);
   const [activeTooltipIndex, setActiveTooltipIndex] = useState<number>(0);
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
   useEffect(() => {
-    setPlans(storage.get(storage.keys.DAILY_PLANS, {}));
-    setGoals(storage.get(storage.keys.GOALS, []));
+    const storedPlans = storage.get(storage.keys.DAILY_PLANS, {});
+    const storedGoals = storage.get(storage.keys.GOALS, []);
+    const storedStudyLogs = storage.get(storage.keys.STUDY_LOGS, []);
+    setPlans(storedPlans && typeof storedPlans === 'object' && !Array.isArray(storedPlans) ? storedPlans : {});
+    setGoals(Array.isArray(storedGoals) ? storedGoals : []);
+    setStudyLogs(Array.isArray(storedStudyLogs) ? storedStudyLogs : []);
   }, []);
 
   useEffect(() => {
@@ -103,6 +108,18 @@ export const ProgressSection: React.FC = () => {
 
   const getProductivityPercent = (iso: string) => productivityMap[iso]?.percent ?? 0;
   const getGoalCount = (iso: string) => goalMap[iso] ?? 0;
+  
+  const getStudyManagementHours = (iso: string) => {
+    return studyLogs
+      .filter(s => s.date === iso && s.subject === StudySubject.MODIRIYAT)
+      .reduce((sum, log) => sum + log.hours, 0);
+  };
+  
+  const getEnglishHours = (iso: string) => {
+    return studyLogs
+      .filter(s => s.date === iso && s.subject === StudySubject.ENGLISH)
+      .reduce((sum, log) => sum + log.hours, 0);
+  };
 
   const averageRange = (startOffset: number, length: number, getter: (iso: string) => number) => {
     if (length <= 0) return 0;
@@ -127,25 +144,90 @@ export const ProgressSection: React.FC = () => {
   const yesterdayProductivity = getProductivityPercent(yesterdayIso);
   const todayGoals = getGoalCount(todayIso);
   const yesterdayGoals = getGoalCount(yesterdayIso);
+  const todayTasks = productivityMap[todayIso] || calculateProductivity();
+  const yesterdayTasks = productivityMap[yesterdayIso] || calculateProductivity();
+  const todayHabits = productivityMap[todayIso] || calculateProductivity();
+  const yesterdayHabits = productivityMap[yesterdayIso] || calculateProductivity();
+  const todayStudyManagement = getStudyManagementHours(todayIso);
+  const yesterdayStudyManagement = getStudyManagementHours(yesterdayIso);
+  const todayEnglish = getEnglishHours(todayIso);
+  const yesterdayEnglish = getEnglishHours(yesterdayIso);
 
-  const dailyDelta = calcDelta(todayProductivity, yesterdayProductivity);
+  // محاسبه میانگین درصد تغییرات امروز در برابر دیروز (فقط 5 معیار: اهداف، کارها، عادت‌ها، مدیریت مطالعه، زبان انگلیسی)
+  const dailyTasksDelta = calcDelta(completionPercent(todayTasks.completedTasks, todayTasks.totalTasks), completionPercent(yesterdayTasks.completedTasks, yesterdayTasks.totalTasks));
+  const dailyHabitsDelta = calcDelta(completionPercent(todayHabits.completedHabits, todayHabits.totalHabits), completionPercent(yesterdayHabits.completedHabits, yesterdayHabits.totalHabits));
+  const dailyGoalsDelta = calcDelta(todayGoals, yesterdayGoals);
+  const dailyStudyManagementDelta = calcDelta(todayStudyManagement, yesterdayStudyManagement);
+  const dailyEnglishDelta = calcDelta(todayEnglish, yesterdayEnglish);
+  const dailyDelta = Math.round((dailyTasksDelta + dailyHabitsDelta + dailyGoalsDelta + dailyStudyManagementDelta + dailyEnglishDelta) / 5);
+
   const goalDailyDelta = calcDelta(todayGoals, yesterdayGoals);
 
   const weeklyAvg = averageRange(0, 7, getProductivityPercent);
   const lastWeeklyAvg = averageRange(7, 7, getProductivityPercent);
-  const weeklyDelta = calcDelta(weeklyAvg, lastWeeklyAvg);
+  const weeklyTaskAvg = averageRange(0, 7, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedTasks, detail.totalTasks);
+  });
+  const lastWeeklyTaskAvg = averageRange(7, 7, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedTasks, detail.totalTasks);
+  });
+  const weeklyHabitAvg = averageRange(0, 7, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedHabits, detail.totalHabits);
+  });
+  const lastWeeklyHabitAvg = averageRange(7, 7, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedHabits, detail.totalHabits);
+  });
+  const weeklyGoalsSum = sumRange(0, 7, getGoalCount);
+  const lastWeeklyGoalsSum = sumRange(7, 7, getGoalCount);
+  const weeklyStudyManagementSum = sumRange(0, 7, getStudyManagementHours);
+  const lastWeeklyStudyManagementSum = sumRange(7, 7, getStudyManagementHours);
+  const weeklyEnglishSum = sumRange(0, 7, getEnglishHours);
+  const lastWeeklyEnglishSum = sumRange(7, 7, getEnglishHours);
+
+  // محاسبه میانگین درصد تغییرات ۷ روز اخیر (فقط 5 معیار: اهداف، کارها، عادت‌ها، مدیریت مطالعه، زبان انگلیسی)
+  const weeklyTaskDelta = calcDelta(weeklyTaskAvg, lastWeeklyTaskAvg);
+  const weeklyHabitDelta = calcDelta(weeklyHabitAvg, lastWeeklyHabitAvg);
+  const weeklyGoalsDelta = calcDelta(weeklyGoalsSum, lastWeeklyGoalsSum);
+  const weeklyStudyManagementDelta = calcDelta(weeklyStudyManagementSum, lastWeeklyStudyManagementSum);
+  const weeklyEnglishDelta = calcDelta(weeklyEnglishSum, lastWeeklyEnglishSum);
+  const weeklyDelta = Math.round((weeklyTaskDelta + weeklyHabitDelta + weeklyGoalsDelta + weeklyStudyManagementDelta + weeklyEnglishDelta) / 5);
 
   const monthlyAvg = averageRange(0, 30, getProductivityPercent);
   const lastMonthlyAvg = averageRange(30, 30, getProductivityPercent);
-  const monthlyDelta = calcDelta(monthlyAvg, lastMonthlyAvg);
+  const monthlyTaskAvg = averageRange(0, 30, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedTasks, detail.totalTasks);
+  });
+  const lastMonthlyTaskAvg = averageRange(30, 30, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedTasks, detail.totalTasks);
+  });
+  const monthlyHabitAvg = averageRange(0, 30, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedHabits, detail.totalHabits);
+  });
+  const lastMonthlyHabitAvg = averageRange(30, 30, (iso) => {
+    const detail = productivityMap[iso] || calculateProductivity();
+    return completionPercent(detail.completedHabits, detail.totalHabits);
+  });
+  const monthlyGoalsSum = sumRange(0, 30, getGoalCount);
+  const lastMonthlyGoalsSum = sumRange(30, 30, getGoalCount);
+  const monthlyStudyManagementSum = sumRange(0, 30, getStudyManagementHours);
+  const lastMonthlyStudyManagementSum = sumRange(30, 30, getStudyManagementHours);
+  const monthlyEnglishSum = sumRange(0, 30, getEnglishHours);
+  const lastMonthlyEnglishSum = sumRange(30, 30, getEnglishHours);
 
-  const weeklyGoals = sumRange(0, 7, getGoalCount);
-  const lastWeeklyGoals = sumRange(7, 7, getGoalCount);
-  const weeklyGoalsDelta = calcDelta(weeklyGoals, lastWeeklyGoals);
-
-  const monthlyGoals = sumRange(0, 30, getGoalCount);
-  const lastMonthlyGoals = sumRange(30, 30, getGoalCount);
-  const monthlyGoalsDelta = calcDelta(monthlyGoals, lastMonthlyGoals);
+  // محاسبه میانگین درصد تغییرات ۳۰ روز اخیر (فقط 5 معیار: اهداف، کارها، عادت‌ها، مدیریت مطالعه، زبان انگلیسی)
+  const monthlyTaskDelta = calcDelta(monthlyTaskAvg, lastMonthlyTaskAvg);
+  const monthlyHabitDelta = calcDelta(monthlyHabitAvg, lastMonthlyHabitAvg);
+  const monthlyGoalsDelta = calcDelta(monthlyGoalsSum, lastMonthlyGoalsSum);
+  const monthlyStudyManagementDelta = calcDelta(monthlyStudyManagementSum, lastMonthlyStudyManagementSum);
+  const monthlyEnglishDelta = calcDelta(monthlyEnglishSum, lastMonthlyEnglishSum);
+  const monthlyDelta = Math.round((monthlyTaskDelta + monthlyHabitDelta + monthlyGoalsDelta + monthlyStudyManagementDelta + monthlyEnglishDelta) / 5);
 
   const chartData = useMemo(() => {
     const data: {
@@ -155,6 +237,8 @@ export const ProgressSection: React.FC = () => {
       habitRate: number;
       taskRate: number;
       goals: number;
+      studyManagement: number;
+      english: number;
     }[] = [];
 
     for (let i = chartRange - 1; i >= 0; i--) {
@@ -169,11 +253,13 @@ export const ProgressSection: React.FC = () => {
         fullLabel,
         habitRate: completionPercent(detail.completedHabits, detail.totalHabits),
         taskRate: completionPercent(detail.completedTasks, detail.totalTasks),
-        goals: getGoalCount(iso)
+        goals: getGoalCount(iso),
+        studyManagement: getStudyManagementHours(iso),
+        english: getEnglishHours(iso)
       });
     }
     return data;
-  }, [chartRange, productivityMap, goalMap]);
+  }, [chartRange, productivityMap, goalMap, studyLogs]);
 
   useEffect(() => {
     setActiveTooltipIndex(chartData.length ? chartData.length - 1 : 0);
@@ -190,6 +276,8 @@ export const ProgressSection: React.FC = () => {
     let habitsTotal = 0;
     let goalsCount = 0;
     let productivitySum = 0;
+    let studyManagementHours = 0;
+    let englishHours = 0;
 
     const effectiveLength = Math.max(length, 1);
 
@@ -202,6 +290,8 @@ export const ProgressSection: React.FC = () => {
       habitsTotal += detail.totalHabits;
       goalsCount += goalMap[iso] || 0;
       productivitySum += getProductivityPercent(iso);
+      studyManagementHours += getStudyManagementHours(iso);
+      englishHours += getEnglishHours(iso);
     }
 
     return {
@@ -212,7 +302,9 @@ export const ProgressSection: React.FC = () => {
       tasksCompleted,
       tasksTotal,
       habitsCompleted,
-      habitsTotal
+      habitsTotal,
+      studyManagement: studyManagementHours,
+      english: englishHours
     };
   };
 
@@ -229,10 +321,22 @@ export const ProgressSection: React.FC = () => {
       const current = aggregateWindow(currentOffset, currentLength);
       const previous = aggregateWindow(previousOffset, previousLength);
 
+      const tasksDelta = calcDelta(current.taskRate, previous.taskRate);
+      const habitsDelta = calcDelta(current.habitRate, previous.habitRate);
+      const goalsDelta = calcDelta(current.goals, previous.goals);
+      const studyManagementDelta = calcDelta(current.studyManagement, previous.studyManagement);
+      const englishDelta = calcDelta(current.english, previous.english);
+
+      // محاسبه میانگین درصد تغییرات 5 معیار (اهداف، کارها، عادت‌ها، مدیریت مطالعه، زبان انگلیسی)
+      const averageDelta = Math.round(
+        (tasksDelta + habitsDelta + goalsDelta + studyManagementDelta + englishDelta) / 5
+      );
+
       return {
         label,
         caption,
         gradient,
+        averageDelta,
         productivity: {
           current: current.productivity,
           previous: previous.productivity,
@@ -241,17 +345,27 @@ export const ProgressSection: React.FC = () => {
         tasks: {
           current: current.taskRate,
           previous: previous.taskRate,
-          delta: calcDelta(current.taskRate, previous.taskRate)
+          delta: tasksDelta
         },
         habits: {
           current: current.habitRate,
           previous: previous.habitRate,
-          delta: calcDelta(current.habitRate, previous.habitRate)
+          delta: habitsDelta
         },
         goals: {
           current: current.goals,
           previous: previous.goals,
-          delta: calcDelta(current.goals, previous.goals)
+          delta: goalsDelta
+        },
+        studyManagement: {
+          current: current.studyManagement,
+          previous: previous.studyManagement,
+          delta: studyManagementDelta
+        },
+        english: {
+          current: current.english,
+          previous: previous.english,
+          delta: englishDelta
         }
       };
     };
@@ -261,7 +375,7 @@ export const ProgressSection: React.FC = () => {
       createSnapshot('۷ روز اخیر', 'مقایسه با هفته قبل', 'from-purple-400/20 via-pink-400/10 to-indigo-500/10', 0, 7, 7, 7),
       createSnapshot('۳۰ روز اخیر', 'مقایسه با ۳۰ روز قبل', 'from-amber-400/20 via-orange-400/15 to-rose-500/10', 0, 30, 30, 30)
     ];
-  }, [productivityMap, goalMap]);
+  }, [productivityMap, goalMap, studyLogs]);
 
   const chartRangeSummary = aggregateWindow(0, chartRange);
 
@@ -318,6 +432,7 @@ export const ProgressSection: React.FC = () => {
               <div className="flex items-center gap-3">
                 {deltaBadge(dailyDelta, 'تغییر نسبت به دیروز')}
                 {deltaBadge(weeklyDelta, 'میانگین هفتگی نسبت به هفته قبل')}
+                {deltaBadge(monthlyDelta, 'میانگین ۳۰ روزه نسبت به ۳۰ روز قبل')}
               </div>
             </div>
 
@@ -339,7 +454,7 @@ export const ProgressSection: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="relative overflow-hidden rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-emerald-300/70 hover:bg-emerald-500/15">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/20 via-transparent to-cyan-400/20 opacity-60"></div>
                 <div className="relative text-emerald-100 text-xs mb-2 flex items-center gap-2">
@@ -377,6 +492,38 @@ export const ProgressSection: React.FC = () => {
                 <div className="relative text-white text-2xl font-bold">{todayGoals}</div>
                 <div className="text-[11px] text-slate-200/80">تغییر نسبت به دیروز: {goalDailyDelta >= 0 ? '+' : '-'}{Math.abs(goalDailyDelta)}%</div>
               </div>
+              <div className="relative overflow-hidden rounded-2xl border border-teal-400/30 bg-teal-500/10 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-teal-300/70 hover:bg-teal-500/15">
+                <div className="relative text-teal-100 text-xs mb-2 flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  مدیریت مطالعه
+                </div>
+                <div className="relative text-white text-2xl font-bold">{(() => {
+                  const todayStudyManagement = getStudyManagementHours(todayIso);
+                  return todayStudyManagement.toFixed(2);
+                })()}</div>
+                <div className="text-[11px] text-slate-200/80">ساعت | تغییر نسبت به دیروز: {(() => {
+                  const todayStudyManagement = getStudyManagementHours(todayIso);
+                  const yesterdayStudyManagement = getStudyManagementHours(yesterdayIso);
+                  const delta = calcDelta(todayStudyManagement, yesterdayStudyManagement);
+                  return `${delta >= 0 ? '+' : '-'}${Math.abs(delta)}%`;
+                })()}</div>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-orange-300/70 hover:bg-orange-500/15">
+                <div className="relative text-orange-100 text-xs mb-2 flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  زبان انگلیسی
+                </div>
+                <div className="relative text-white text-2xl font-bold">{(() => {
+                  const todayEnglish = getEnglishHours(todayIso);
+                  return todayEnglish.toFixed(2);
+                })()}</div>
+                <div className="text-[11px] text-slate-200/80">ساعت | تغییر نسبت به دیروز: {(() => {
+                  const todayEnglish = getEnglishHours(todayIso);
+                  const yesterdayEnglish = getEnglishHours(yesterdayIso);
+                  const delta = calcDelta(todayEnglish, yesterdayEnglish);
+                  return `${delta >= 0 ? '+' : '-'}${Math.abs(delta)}%`;
+                })()}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -384,7 +531,7 @@ export const ProgressSection: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {improvementSnapshots.map((item, idx) => {
-          const positive = item.productivity.delta >= 0;
+          const positive = item.averageDelta >= 0;
           const ProdIcon = positive ? TrendingUp : TrendingDown;
 
           const statPill = (delta: number) => {
@@ -413,7 +560,7 @@ export const ProgressSection: React.FC = () => {
                   </div>
                   <div className={`flex items-center gap-1 px-3 py-1 rounded-full border text-sm font-bold ${positive ? 'text-emerald-100 border-emerald-400/60 bg-emerald-500/20' : 'text-rose-100 border-rose-400/60 bg-rose-500/20'}`}>
                     <ProdIcon className="w-4 h-4" />
-                    <span>{signed(item.productivity.delta)}</span>
+                    <span>{signed(item.averageDelta)}</span>
                   </div>
                 </div>
 
@@ -432,7 +579,9 @@ export const ProgressSection: React.FC = () => {
                   {[
                     { title: 'اهداف ثبت و انجام‌شده', current: item.goals.current, previous: item.goals.previous, delta: item.goals.delta, suffix: ' هدف' },
                     { title: 'نرخ تکمیل کارها', current: item.tasks.current, previous: item.tasks.previous, delta: item.tasks.delta, suffix: '%' },
-                    { title: 'نرخ انجام عادت‌ها', current: item.habits.current, previous: item.habits.previous, delta: item.habits.delta, suffix: '%' }
+                    { title: 'نرخ انجام عادت‌ها', current: item.habits.current, previous: item.habits.previous, delta: item.habits.delta, suffix: '%' },
+                    { title: 'مدیریت مطالعه', current: item.studyManagement.current, previous: item.studyManagement.previous, delta: item.studyManagement.delta, suffix: ' ساعت' },
+                    { title: 'زبان انگلیسی', current: item.english.current, previous: item.english.previous, delta: item.english.delta, suffix: ' ساعت' }
                   ].map((stat, sIdx) => (
                     <div
                       key={sIdx}
@@ -441,8 +590,8 @@ export const ProgressSection: React.FC = () => {
                       <div>
                         <div className="text-[11px] text-slate-300">{stat.title}</div>
                         <div className="text-sm font-semibold text-white flex items-center gap-1">
-                          <span>{stat.current}{stat.suffix}</span>
-                          <span className="text-[10px] text-slate-400">/ بازه قبل: {stat.previous}{stat.suffix}</span>
+                          <span>{typeof stat.current === 'number' && stat.suffix === ' ساعت' ? stat.current.toFixed(2) : stat.current}{stat.suffix}</span>
+                          <span className="text-[10px] text-slate-400">/ بازه قبل: {typeof stat.previous === 'number' && stat.suffix === ' ساعت' ? stat.previous.toFixed(2) : stat.previous}{stat.suffix}</span>
                         </div>
                       </div>
                       {statPill(stat.delta)}
@@ -477,7 +626,7 @@ export const ProgressSection: React.FC = () => {
               <span>طول بازه: {formatRangeLabel(chartRange)}</span>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-3 text-white shadow-inner">
               <div className="text-xs text-cyan-100 flex items-center justify-between">
                 <span>نرخ انجام عادت‌ها</span>
@@ -502,6 +651,22 @@ export const ProgressSection: React.FC = () => {
               <div className="text-2xl font-black text-amber-100">{chartRangeSummary.goals}</div>
               <div className="text-[11px] text-slate-200/80">هدف انجام‌شده در این بازه</div>
             </div>
+            <div className="rounded-xl border border-teal-400/30 bg-teal-500/10 p-3 text-white shadow-inner">
+              <div className="text-xs text-teal-100 flex items-center justify-between">
+                <span>مدیریت مطالعه</span>
+                <span className="text-[11px] text-teal-200/80">{formatRangeLabel(chartRange)}</span>
+              </div>
+              <div className="text-2xl font-black text-teal-100">{chartRangeSummary.studyManagement.toFixed(2)}</div>
+              <div className="text-[11px] text-slate-200/80">ساعت مطالعه</div>
+            </div>
+            <div className="rounded-xl border border-orange-400/30 bg-orange-500/10 p-3 text-white shadow-inner">
+              <div className="text-xs text-orange-100 flex items-center justify-between">
+                <span>زبان انگلیسی</span>
+                <span className="text-[11px] text-orange-200/80">{formatRangeLabel(chartRange)}</span>
+              </div>
+              <div className="text-2xl font-black text-orange-100">{chartRangeSummary.english.toFixed(2)}</div>
+              <div className="text-[11px] text-slate-200/80">ساعت مطالعه</div>
+            </div>
           </div>
         </div>
       </div>
@@ -513,7 +678,7 @@ export const ProgressSection: React.FC = () => {
         </div>
         <div className="relative flex items-center justify-between gap-3 flex-wrap mb-4">
           <div>
-            <div className="text-xs text-slate-400">روند عادت‌ها، کارها و اهداف در بازه انتخابی</div>
+            <div className="text-xs text-slate-400">روند عادت‌ها، کارها، اهداف، مدیریت مطالعه و زبان انگلیسی در بازه انتخابی</div>
             <h3 className="text-xl font-bold text-white flex items-center gap-2">
               <Flame className="w-5 h-5 text-amber-300" />
               نمودار تحلیلی بهره‌وری
@@ -568,6 +733,14 @@ export const ProgressSection: React.FC = () => {
                   <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.75} />
                   <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
                 </linearGradient>
+                <linearGradient id="studyManagementGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.75} />
+                  <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="englishGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.75} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
               </defs>
               <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="label" stroke="#94a3b8" tick={{ fontSize: 10 }} interval="preserveStartEnd" minTickGap={20} />
@@ -581,13 +754,20 @@ export const ProgressSection: React.FC = () => {
                   return point?.fullLabel || point?.label || '';
                 }}
                 formatter={(value: any, name: any) => {
-                  if (name === 'اهداف انجام‌شده') return [`${value} هدف`, name];
+                  if (name === 'اهداف انجام‌شده') {
+                    return [`${value}`, name];
+                  }
+                  if (name === 'مدیریت مطالعه' || name === 'زبان انگلیسی') {
+                    return [`${typeof value === 'number' ? value.toFixed(2) : value} ساعت`, name];
+                  }
                   return [`${value}%`, name];
                 }}
               />
               <Area yAxisId="left" type="monotone" dataKey="habitRate" name="انجام عادت‌ها" stroke="#22d3ee" fill="url(#habitGradient)" strokeWidth={3} />
               <Area yAxisId="left" type="monotone" dataKey="taskRate" name="انجام کارها" stroke="#a78bfa" fill="url(#taskGradient)" strokeWidth={3} />
               <Area yAxisId="right" type="monotone" dataKey="goals" name="اهداف انجام‌شده" stroke="#fbbf24" fill="url(#goalGradient)" strokeWidth={3} />
+              <Area yAxisId="right" type="monotone" dataKey="studyManagement" name="مدیریت مطالعه" stroke="#14b8a6" fill="url(#studyManagementGradient)" strokeWidth={3} />
+              <Area yAxisId="right" type="monotone" dataKey="english" name="زبان انگلیسی" stroke="#f59e0b" fill="url(#englishGradient)" strokeWidth={3} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -595,4 +775,3 @@ export const ProgressSection: React.FC = () => {
     </div>
   );
 };
-

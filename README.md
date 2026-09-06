@@ -1,255 +1,117 @@
-# 🎯 AI-Powered Planning & Goal Tracking App
-
 <div align="center">
 
-![React](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-6.2-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-![Google Gemini](https://img.shields.io/badge/Google_Gemini-AI-4285F4?style=for-the-badge&logo=google&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+# 🎯 PIMX_PLANNER 📚⚡
 
-**🚀 A modern, AI-powered planning application that helps you organize your life, track goals, and boost productivity!**
+### Comprehensive AI-Powered Personal Growth, Study Management & Goal-Tracking Dashboard
 
-[Features](#-features) • [Demo](#-demo) • [Installation](#-installation) • [Usage](#-usage) • [Tech Stack](#-tech-stack) • [Contributing](#-contributing)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/agpl-3.0)
+[![React 19](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-6.2-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Google Gemini](https://img.shields.io/badge/Gemini_AI-2.0-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Ready-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Read in Persian](https://img.shields.io/badge/مطالعه_به_فارسی-Persian_README-008080?style=for-the-badge)](#-توضیحات-فارسی-persian-description)
+
+<p align="center">
+  A high-octane personal productivity workstation. Manage daily routines, study sessions, academic grades, long-term visions, and personal reflections with integrated Google Gemini AI assistance and persistent analytics.
+</p>
+
+[Key Features](#-key-features) •
+[Modules](#-workspace-modules) •
+[Quick Start](#-quick-start) •
+[توضیحات فارسی](#-توضیحات-فارسی-persian-description) •
+[License](#-license)
 
 </div>
 
 ---
 
-## ✨ Features
+## ⚡ Key Features
 
-### 🤖 **AI-Powered Planning**
-- Integrated with **Google Gemini AI** for intelligent task suggestions
-- Smart scheduling and priority recommendations
-- Natural language processing for easy task creation
-
-### 📅 **Calendar Management**
-- Interactive calendar view
-- Drag-and-drop event scheduling
-- Monthly, weekly, and daily views
-- Event reminders and notifications
-
-### 📝 **Daily Planner**
-- Organize tasks by priority
-- Time-blocking capabilities
-- Daily progress tracking
-- Quick task completion checkboxes
-
-### 🎯 **Goal Tracking**
-- Set and monitor long-term goals
-- Break down goals into actionable tasks
-- Progress visualization
-- Milestone celebrations
-
-### 📊 **Progress Visualization**
-- Beautiful charts powered by Recharts
-- Track productivity trends
-- Analyze goal completion rates
-- Export progress reports
-
-### 🎓 **Grade Tracker**
-- Track academic performance
-- Calculate GPA automatically
-- Course management
-- Assignment deadlines
-
-### 💬 **AI Chat Interface**
-- Chat with Gemini AI for planning advice
-- Get productivity tips
-- Ask questions about your schedule
-- Receive personalized recommendations
-
-### 🎥 **Video Integration**
-- Embed educational or motivational videos
-- Create video playlists
-- Track watched content
+- 📅 **Smart Interactive Calendar & Scheduling**: Integrated event scheduling, Pomodoro timer, study intervals, and recurrence patterns.
+- 🎯 **Goal Progression & OKR Engine**: Break macro visions down into actionable weekly sprints with automated completion velocity metrics.
+- 📊 **Academic Grade Tracker & Analytics**: Real-time GPA calculators, subject weightings, and visual performance graphs.
+- 🤖 **AI Productivity Companion (Gemini AI)**: Intelligent schedule optimization, study summaries, and interactive context-aware advice.
+- 📖 **Personal Diary & Reflection Log**: Markdown-supported daily journal with mood telemetry and encrypted local persistence.
+- 🌐 **Modern Glassmorphic UI**: Ultra-responsive dark/light theme designed for zero latency on both desktop and mobile.
 
 ---
 
-## 🎬 Demo
+## 🧩 Workspace Modules
 
-> 📸 Add screenshots or GIF demos of your application here!
-
----
-
-## 🛠️ Tech Stack
-
-### **Frontend**
-- ⚛️ **React 19.2** - Modern UI library
-- 📘 **TypeScript 5.8** - Type-safe development
-- ⚡ **Vite 6.2** - Lightning-fast build tool
-- 🎨 **Lucide React** - Beautiful icon library
-- 📈 **Recharts 3.5.1** - Data visualization
-
-### **Backend**
-- 🖥️ **Express 4.22** - Node.js web framework
-- 🔌 **CORS 2.8** - Cross-origin resource sharing
-- 🤖 **@google/genai 1.30** - Gemini AI integration
-- 🗄️ **PostgreSQL** - Robust database (pg 8.16)
-
----
-
-## 📦 Installation
-
-### **Prerequisites**
-
-- **Node.js** (v20.0.0 or higher)
-- **npm** or **yarn**
-- **PostgreSQL** database
-- **Google Gemini API Key** ([Get it here](https://makersuite.google.com/app/apikey))
-
-### **Step 1: Clone the Repository**
-
-```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-cd YOUR_REPO_NAME
+```text
+PIMX_PLANNER/
+├── components/
+│   ├── CalendarSection.tsx     # Timetable & scheduling suite
+│   ├── DailyPlanner.tsx        # Daily checklists, habits & priority matrix
+│   ├── GoalSection.tsx         # Vision boards & milestone tracking
+│   ├── GradeTracker.tsx        # Academic performance analytics
+│   ├── StudySection.tsx        # Focus blocks, pomodoro & curriculum logging
+│   ├── EnglishStudySection.tsx # Vocabulary, language goals & flashcards
+│   ├── DiarySection.tsx        # Reflective journaling & mood tracker
+│   └── ChatSection.tsx         # Gemini AI interactive study assistant
+├── server/                     # Node.js + PostgreSQL synchronization backend
+└── types.ts                    # Strong TypeScript schema definitions
 ```
 
-### **Step 2: Install Dependencies**
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18.x or 20.x+
+- npm or pnpm
+
+### Installation
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/MOHAMMADREZAABEDINPOOR/PIMX_PLANNER.git
+cd PIMX_PLANNER
+
+# 2. Install dependencies
 npm install
-```
 
-### **Step 3: Configure Environment Variables**
+# 3. Configure environment
+cp .env.example .env
 
-Create a `.env.local` file in the root directory:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-DATABASE_URL=postgresql://user:password@localhost:5432/planning_app
-```
-
-### **Step 4: Set Up Database**
-
-```bash
-# Create PostgreSQL database
-creatdb planning_app
-
-# Run migrations (if applicable)
-npm run migrate
-```
-
----
-
-## 🚀 Usage
-
-### **Development Mode**
-
-**Terminal 1** - Start Frontend:
-```bash
+# 4. Start local development server
 npm run dev
 ```
 
-**Terminal 2** - Start Backend:
-```bash
-npm run api
-```
-
-**Or use the convenient batch file:**
-```bash
-start-all.bat
-```
-
-The app will be available at:
-- 🌐 Frontend: `http://localhost:5173`
-- 🔌 Backend: `http://localhost:3000`
-
-### **Production Build**
-
-```bash
-npm run build
-npm run preview
-```
+Visit `http://localhost:5173` in your browser.
 
 ---
 
-## 📁 Project Structure
+## 🇮🇷 توضیحات فارسی (Persian Description)
 
-```
-.
-├── components/          # React components
-│   ├── CalendarSection.tsx
-│   ├── ChatSection.tsx
-│   ├── DailyPlanner.tsx
-│   ├── GoalSection.tsx
-│   ├── GradeTracker.tsx
-│   ├── ProgressSection.tsx
-│   └── ...
-├── server/             # Express backend
-│   └── index.cjs
-├── App.tsx             # Main app component
-├── types.ts            # TypeScript definitions
-├── utils.ts            # Utility functions
-├── vite.config.ts      # Vite configuration
-└── package.json        # Dependencies
-```
+### معرفی پروژه PIMX_PLANNER
+پلتفرم **PIMX_PLANNER** یک داشبورد همه‌کاره و مدرن برای مدیریت زمان، برنامه‌ریزی تحصیلی، رشد فردی و ردیابی اهداف است که با ترکیب قدرت **React 19**، **TypeScript** و هوش مصنوعی **Google Gemini** ساخته شده است.
+
+### ویژگی‌های کلیدی:
+1. **برنامه‌ریزی روزانه و مدیریت عادات:**
+   * ماتریس اولویت‌بندی تسک‌ها (Eisenhower Matrix) و چک‌لیست‌های پیشرفته.
+   * ثبت زنجیره پیوستگی عادات (Habit Streaks) و پاداش‌دهی بصری.
+2. **مدیریت تخصصی کنکور و امتحانات:**
+   * ثبت ساعات مطالعه دروس، تعداد تست و درصدگیری با نمودارهای پیشرفت هفتگی و ماهانه.
+   * محاسبه‌گر هوشمند معدل و کارنامه با امکان شبیه‌سازی نمرات.
+3. **دستیار هوشمند برنامه‌ریزی (Gemini AI):**
+   * ارائه راهکار برای حل مشکل کمبود زمان و خواب منظم.
+   * تحلیل برنامه هفتگی و پیشنهاد بهینه‌سازی تایم‌های مطالعه.
+4. **دفتر خاطرات و ثبت روحیات:**
+   * ژورنال‌نویسی روزانه با ثبت مدهای روحی و امکان خروجی گرفتن امن.
 
 ---
 
-## 🎨 Key Components
+## 📜 License & Copyleft
 
-| Component | Description |
-|-----------|-------------|
-| 📅 `CalendarSection` | Interactive calendar with event management |
-| 💬 `ChatSection` | AI-powered chat interface |
-| 📝 `DailyPlanner` | Daily task organization |
-| 🎯 `GoalSection` | Goal tracking and management |
-| 🎓 `GradeTracker` | Academic performance tracking |
-| 📊 `ProgressSection` | Visual progress analytics |
-| 🎥 `VideoSection` | Video content integration |
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
----
-
-## 🔒 Security
-
-⚠️ **IMPORTANT**: Never commit your `.env.local` file!
-
-- Keep your `GEMINI_API_KEY` secret
-- Use environment variables for sensitive data
-- Add `.env.local` to `.gitignore`
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how you can help:
-
-1. 🍴 Fork the repository
-2. 🌿 Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. ✅ Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. 📤 Push to the branch (`git push origin feature/AmazingFeature`)
-5. 🔀 Open a Pull Request
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- 🤖 Google Gemini AI for intelligent features
-- ⚛️ React team for the amazing framework
-- 📊 Recharts for beautiful visualizations
-- 🎨 Lucide for elegant icons
-
----
-
-## 📧 Contact
-
-**Your Name** - [@your_twitter](https://twitter.com/your_twitter)
-
-**Project Link**: [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME)
+> **Copyright (c) 2026 MOHAMMADREZA ABEDINPOOR.**  
+> Redistribution or modification requires open-sourcing all derivative work under the identical AGPL-3.0 license. Unauthorized proprietary rebranding or commercial resale is strictly forbidden.
 
 ---
 
 <div align="center">
-
-**⭐ Star this repo if you find it helpful! ⭐**
-
-Made with ❤️ and ☕
-
+  <sub>Engineered by <a href="https://github.com/MOHAMMADREZAABEDINPOOR">MOHAMMADREZA ABEDINPOOR</a>. Star ⭐ this repository if you find it helpful!</sub>
 </div>

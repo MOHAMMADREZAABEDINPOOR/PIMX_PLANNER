@@ -7,6 +7,21 @@ export enum VideoSubject {
   FIZIK = "فیزیک"
 }
 
+export enum StudySubject {
+  HESABAN = "حسابان",
+  HENDESEH = "هندسه",
+  GOSASTEH = "گسسته",
+  SHIMI = "شیمی",
+  FIZIK = "فیزیک",
+  HOVIYAT = "هویت اجتماعی",
+  SALAMAT = "سلامت و بهداشت",
+  FARSI = "فارسی",
+  ARABI = "عربی",
+  ENGLISH = "زبان انگلیسی",
+  DINI = "دینی",
+  MODIRIYAT = "مدیریت خانواده"
+}
+
 export enum GradeSubject {
   HESABAN = "حسابان",
   HENDESEH = "هندسه",
@@ -34,6 +49,19 @@ export interface VideoLog {
   date: string; // ISO String YYYY-MM-DD
   subject: VideoSubject;
   count: number;
+}
+
+export interface StudyConfig {
+  subject: StudySubject;
+  totalHours: number;
+  scheduleDays?: number[]; // Array of Day Indexes (0=Sun, 1=Mon, ..., 6=Sat)
+}
+
+export interface StudyLog {
+  id: string;
+  date: string; // ISO String YYYY-MM-DD
+  subject: StudySubject;
+  hours: number;
 }
 
 export interface Habit {
@@ -67,6 +95,7 @@ export interface GradeEntry {
 export type TimeRange = '1W' | '2W' | '1M' | '2M' | '4M' | '6M' | '8M' | '1Y' | '2Y';
 
 export type GoalType = 'daily' | 'short-term' | 'long-term';
+export type GoalStatus = 'pending' | 'done' | 'missed';
 
 export type NoteTargetType = 'habit' | 'task' | 'goal';
 
@@ -80,6 +109,12 @@ export interface DayNote {
   createdAt: string; // timestamp
 }
 
+export interface DiaryEntry {
+  date: string; // ISO date
+  text: string;
+  updatedAt: string; // ISO timestamp
+}
+
 export interface Goal {
   id: string;
   text: string;
@@ -88,6 +123,8 @@ export interface Goal {
   createdAt: string; // ISO date
   scheduledFor?: string; // ISO date the goal is meant to surface
   completedAt?: string; // ISO date of completion
+  status?: GoalStatus; // legacy goals default to pending/done based on completed flag
+  missedAt?: string; // ISO date of failure (for missed daily goals)
 }
 
 export interface Message {
@@ -102,4 +139,67 @@ export interface ChatSession {
   title: string;
   messages: Message[];
   lastModified: string;
+}
+
+export type ReminderPriority = 'low' | 'normal' | 'high';
+
+export interface ReminderEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startAt: string; // ISO timestamp
+  createdAt: string; // ISO timestamp
+  tags?: string[];
+  priority?: ReminderPriority;
+  pinned?: boolean;
+  location?: string;
+}
+
+export type FuturePlanPriority = 'low' | 'normal' | 'high';
+export type FuturePlanStatus = 'active' | 'done';
+
+export interface FuturePlan {
+  id: string;
+  title: string;
+  targetDate: string; // ISO date YYYY-MM-DD for the planned day
+  priority: FuturePlanPriority;
+  status: FuturePlanStatus;
+  description?: string;
+  category?: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+export type PersonRelation =
+  | 'independent'
+  | 'family_head'
+  | 'spouse'
+  | 'son'
+  | 'daughter'
+  | 'daughter_in_law'
+  | 'son_in_law'
+  | 'grandchild'
+  | 'mother'
+  | 'father'
+  | 'other';
+
+export interface PlannedFamily {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  editHistory?: string[]; // ISO timestamps, newest changes are appended
+}
+
+export interface PlannedPerson {
+  id: string;
+  fullName: string;
+  relation: PersonRelation;
+  customRelationTag?: string;
+  familyId?: string;
+  futurePlan: string;
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+  editHistory?: string[]; // ISO timestamps, newest changes are appended
 }

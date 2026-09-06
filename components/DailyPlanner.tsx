@@ -539,64 +539,64 @@ export const DailyPlanner: React.FC = () => {
         <div className="absolute -left-20 top-10 w-48 h-48 bg-cyan-500/24 blur-[90px] animate-[spin_14s_linear_infinite]"></div>
         <div className="absolute -right-24 -top-16 w-64 h-64 bg-purple-500/18 blur-[110px] animate-[spin_16s_linear_infinite] [animation-direction:reverse]"></div>
         <div className="absolute right-10 -bottom-8 w-40 h-40 bg-emerald-500/15 blur-[100px] animate-float"></div>
-        <div className="relative flex flex-col xl:flex-row gap-6 xl:items-center">
-          <div className="flex-1 space-y-3">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.35em] text-cyan-100/80 font-mono">
-              <Sparkles className="w-4 h-4 text-cyan-300" />
+        <div className="relative flex flex-col lg:flex-row gap-4 md:gap-6 lg:items-center">
+          <div className="flex-1 space-y-3 md:space-y-4">
+            <div className="flex items-center gap-2 text-[10px] sm:text-[11px] uppercase tracking-[0.35em] text-cyan-100/80 font-mono">
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-300" />
               <span>جزئیات روز</span>
             </div>
-              <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-2xl md:text-3xl font-black text-white drop-shadow-lg">
-                <Calendar className="w-7 h-7 text-cyan-300" />
-                {toPersianDate(currentDate)}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xl sm:text-2xl md:text-3xl font-black text-white drop-shadow-lg">
+                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-cyan-300 flex-shrink-0" />
+                <span className="break-words">{toPersianDate(currentDate)}</span>
               </div>
-              <span className="px-3 py-1.5 rounded-full bg-cyan-500/15 text-cyan-100 border border-cyan-400/40 text-xs font-semibold flex items-center gap-2">
-                <Activity className="w-4 h-4" />
+              <span className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-cyan-500/15 text-cyan-100 border border-cyan-400/40 text-[10px] sm:text-xs font-semibold flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
+                <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                 بهره‌وری: {completionPercent}%
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button onClick={() => changeDate(1)} className="group px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-400/40 text-emerald-100 hover:text-white hover:border-emerald-300/60 transition-all flex items-center gap-2">
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
-                روز بعد
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <button onClick={() => changeDate(1)} className="group px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-400/40 text-emerald-100 hover:text-white hover:border-emerald-300/60 transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:translate-x-1 transition flex-shrink-0" />
+                <span>روز بعد</span>
               </button>
-              <button onClick={() => changeDate(-1)} className="group px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 border border-emerald-400/40 text-emerald-100 hover:text-white hover:border-emerald-300/60 transition-all flex items-center gap-2">
-                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition" />
-                روز قبل
+              <button onClick={() => changeDate(-1)} className="group px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 border border-emerald-400/40 text-emerald-100 hover:text-white hover:border-emerald-300/60 transition-all flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:-translate-x-1 transition flex-shrink-0" />
+                <span>روز قبل</span>
               </button>
-              <div className="px-4 py-2 rounded-xl bg-slate-900/70 border border-emerald-500/25 text-xs text-emerald-100 font-mono">
+              <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-slate-900/70 border border-emerald-500/25 text-[10px] sm:text-xs text-emerald-100 font-mono whitespace-nowrap">
                 {toISODate(currentDate)}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
-            <div className="relative w-32 h-32 shrink-0">
+          <div className="flex flex-col sm:flex-row items-center sm:items-center justify-center lg:justify-end gap-4 sm:gap-5 mt-4 lg:mt-0">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 shrink-0">
               <div className="absolute inset-0 rounded-full border border-emerald-500/30" style={progressRingStyle}></div>
-              <div className="absolute inset-[8px] rounded-full bg-slate-950/80 border border-white/10 flex flex-col items-center justify-center text-white shadow-[0_20px_45px_-18px_rgba(16,185,129,0.55)]">
-                <div className="text-3xl font-black">{completionPercent}%</div>
-                <div className="text-[11px] text-slate-400">درصد تکمیل</div>
+              <div className="absolute inset-[6px] sm:inset-[7px] md:inset-[8px] rounded-full bg-slate-950/80 border border-white/10 flex flex-col items-center justify-center text-white shadow-[0_20px_45px_-18px_rgba(16,185,129,0.55)]">
+                <div className="text-2xl sm:text-2xl md:text-3xl font-black">{completionPercent}%</div>
+                <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-400">درصد تکمیل</div>
               </div>
             </div>
-              <div className="grid grid-cols-2 gap-3 text-sm min-w-[220px]">
-              <div className="relative overflow-hidden rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2.5">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 text-sm w-full sm:w-auto sm:min-w-[200px] md:min-w-[220px]">
+              <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-2.5 sm:px-3 py-2 sm:py-2.5">
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/12 to-transparent"></div>
-                <div className="relative text-emerald-100 text-xs">عادت‌ها</div>
-                <div className="relative text-white font-bold text-lg">{completedHabits}/{totalHabits || 0}</div>
+                <div className="relative text-emerald-100 text-[10px] sm:text-xs">عادت‌ها</div>
+                <div className="relative text-white font-bold text-base sm:text-lg">{completedHabits}/{totalHabits || 0}</div>
               </div>
-              <div className="relative overflow-hidden rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-3 py-2.5">
+              <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-cyan-400/25 bg-cyan-500/10 px-2.5 sm:px-3 py-2 sm:py-2.5">
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/15 to-transparent"></div>
-                <div className="relative text-cyan-100 text-xs">Tasks</div>
-                <div className="relative text-white font-bold text-lg">{completedTasks}/{totalTasks}</div>
+                <div className="relative text-cyan-100 text-[10px] sm:text-xs">Tasks</div>
+                <div className="relative text-white font-bold text-base sm:text-lg">{completedTasks}/{totalTasks}</div>
               </div>
-              <div className="relative overflow-hidden rounded-2xl border border-purple-400/25 bg-purple-500/10 px-3 py-2.5 col-span-2">
+              <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-purple-400/25 bg-purple-500/10 px-2.5 sm:px-3 py-2 sm:py-2.5 col-span-2">
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-400/15 via-cyan-400/10 to-transparent"></div>
                 <div className="relative flex items-center justify-between">
                   <div>
-                    <div className="text-purple-100 text-xs">Total score</div>
-                    <div className="text-white font-bold text-lg">{earnedScore}/{totalScore || 0}</div>
+                    <div className="text-purple-100 text-[10px] sm:text-xs">Total score</div>
+                    <div className="text-white font-bold text-base sm:text-lg">{earnedScore}/{totalScore || 0}</div>
                   </div>
-                  <Clock3 className="w-5 h-5 text-purple-200" />
+                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-purple-200 flex-shrink-0" />
                 </div>
               </div>
             </div>
@@ -843,10 +843,10 @@ export const DailyPlanner: React.FC = () => {
           </div>
           <div className="w-full min-w-0 space-y-6">
             <div>
-              <div className="text-sm text-slate-300 mb-2">نمودار درصد پیشرفت</div>
-              <div className="h-[300px]">
+              <div className="text-xs sm:text-sm text-slate-300 mb-2">نمودار درصد پیشرفت</div>
+              <div className="h-[240px] sm:h-[280px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={historyData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <AreaChart data={historyData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPerf" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.85}/>
@@ -854,19 +854,31 @@ export const DailyPlanner: React.FC = () => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey="date" stroke="#94a3b8" tick={{fontSize: 10}} interval="preserveStartEnd" minTickGap={30} />
-                    <YAxis domain={[0, 100]} stroke="#94a3b8" tick={{fontSize: 10}} width={30} />
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="#94a3b8" 
+                      tick={{fontSize: 9}} 
+                      interval="preserveStartEnd" 
+                      minTickGap={20}
+                      padding={{ left: 5, right: 5 }}
+                    />
+                    <YAxis 
+                      domain={[0, 100]} 
+                      stroke="#94a3b8" 
+                      tick={{fontSize: 9}} 
+                      width={28}
+                    />
                     <Tooltip content={<HistoryTooltip />} />
-                    <Area type="monotone" dataKey="percentage" stroke="#22d3ee" fill="url(#colorPerf)" strokeWidth={3} />
+                    <Area type="monotone" dataKey="percentage" stroke="#22d3ee" fill="url(#colorPerf)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
             <div>
-              <div className="text-sm text-slate-300 mb-2">نمودار امتیازها</div>
-              <div className="h-[300px]">
+              <div className="text-xs sm:text-sm text-slate-300 mb-2">نمودار امتیازها</div>
+              <div className="h-[240px] sm:h-[280px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={historyData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <AreaChart data={historyData} margin={{ top: 5, right: 5, left: -15, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorPoints" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#34d399" stopOpacity={0.85}/>
@@ -874,10 +886,22 @@ export const DailyPlanner: React.FC = () => {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey="date" stroke="#94a3b8" tick={{fontSize: 10}} interval="preserveStartEnd" minTickGap={30} />
-                    <YAxis domain={[0, 'auto']} stroke="#94a3b8" tick={{fontSize: 10}} width={34} />
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="#94a3b8" 
+                      tick={{fontSize: 9}} 
+                      interval="preserveStartEnd" 
+                      minTickGap={20}
+                      padding={{ left: 5, right: 5 }}
+                    />
+                    <YAxis 
+                      domain={[0, 'auto']} 
+                      stroke="#94a3b8" 
+                      tick={{fontSize: 9}} 
+                      width={28}
+                    />
                     <Tooltip content={<HistoryTooltip dataKeyLabel="points" />} />
-                    <Area type="monotone" dataKey="points" stroke="#34d399" fill="url(#colorPoints)" strokeWidth={3} />
+                    <Area type="monotone" dataKey="points" stroke="#34d399" fill="url(#colorPoints)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
