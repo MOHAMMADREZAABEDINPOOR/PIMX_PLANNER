@@ -123,7 +123,7 @@ const upsertKV = async (client, key, value) => {
     await client.query(
       `
         INSERT INTO kv (key, value)
-        VALUES ($1, $2::jsonb)
+        VALUES ($1, $2)
         ON CONFLICT (key) DO UPDATE
           SET value = EXCLUDED.value,
               updated_at = now();
