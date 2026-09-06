@@ -95,42 +95,40 @@ const normalizeValue = raw => {
 };
 
 const upsertKV = async (client, key, value) => {
-  // First attempt with normalized value
+  // Always send JSON text and cast to JSONB to avoid invalid-json inserts.
+  let jsonValue;
   try {
-    await client.query(
-      `
-        INSERT INTO kv (key, value)
-        VALUES ($1, $2)
-        ON CONFLICT (key) DO UPDATE
-          SET value = EXCLUDED.value,
-              updated_at = now();
-      `,
-      [key, value]
-    );
-    return;
-  } catch (err) {
-    // Fallback: stringify the original payload to avoid JSON parse errors
-    const fallback =
-      typeof value === 'string'
-        ? value
-        : (() => {
-            try {
-              return JSON.stringify(value);
-            } catch {
-              return String(value);
-            }
-          })();
-    await client.query(
-      `
-        INSERT INTO kv (key, value)
-        VALUES ($1, $2)
-        ON CONFLICT (key) DO UPDATE
-          SET value = EXCLUDED.value,
-              updated_at = now();
-      `,
-      [key, fallback]
-    );
+const upsertKV = async (client, key, value) => {
+  // Always send JSON text and cast to JSONB to avoid invalid-json inserts.
+  let jsonValue;
+  try {
+    jsonValue = JSON.stringify(value ?? null);
+  } catch {
+    jsonValue = JSON.stringify(String(value));
   }
+
+  await client.query(
+    `
+      INSERT INTO kv (key, value)
+      VALUES ($1, $2::jsonb)
+      ON CONFLICT (key) DO UPDATE
+        SET value = EXCLUDED.value,
+            updated_at = now();
+    `,
+    [key, jsonValue]
+  );
+};}
+
+  await client.query(
+    `
+      INSERT INTO kv (key, value)
+      VALUES ($1, $2::jsonb)
+      ON CONFLICT (key) DO UPDATE
+        SET value = EXCLUDED.value,
+            updated_at = now();
+    `,
+    [key, jsonValue]
+  );
 };
 
 app.get('/api/ping', (_req, res) => {
