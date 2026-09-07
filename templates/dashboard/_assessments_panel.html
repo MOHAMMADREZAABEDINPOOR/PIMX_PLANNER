@@ -1,0 +1,56 @@
+<section class="panel stack">
+    <div class="panel__header">
+        <div>
+            <h2>نمرات و آزمون‌ها</h2>
+            <p>در یک صفحه مستقل، فقط روی کیفیت آزمون‌های هر درس تمرکز کن.</p>
+        </div>
+    </div>
+
+    <div class="panel-split">
+        <div class="mini-panel">
+            <h3>آخرین کارنامه‌ها</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>درس</th>
+                        <th>تاریخ</th>
+                        <th>نمره</th>
+                        <th>یادداشت</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in assessments %}
+                        <tr>
+                            <td>{{ record.get_subject_display }}</td>
+                            <td>
+                                <span class="js-jalali-text" data-g-date="{{ record.exam_date|date:'Y-m-d' }}"></span>
+                            </td>
+                            <td>{{ record.score }}</td>
+                            <td>{{ record.note|default:"-" }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4">داده‌ای برای نمایش وجود ندارد.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="mini-panel">
+            <h3>ثبت نمره جدید</h3>
+            <form method="post" data-ajax="true">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_assessment" />
+                <input type="hidden" name="section" value="assessments" />
+                {{ assessment_form.as_p }}
+                <button class="btn" type="submit">ذخیره نمره</button>
+            </form>
+            <ul class="tips">
+                <li>نمرات پی‌درپی یک درس را کنار هم بررسی کن تا روند پیشرفت را ببینی.</li>
+                <li>اگر آزمون مَز بود، در یادداشت درجه سختی یا تعداد تست را بنویس.</li>
+            </ul>
+        </div>
+    </div>
+
+    <canvas id="assessmentChart" class="chart-card" height="180"></canvas>
+</section>

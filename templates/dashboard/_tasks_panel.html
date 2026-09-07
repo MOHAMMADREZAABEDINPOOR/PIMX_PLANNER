@@ -1,0 +1,89 @@
+<section class="panel stack">
+    <div class="panel__header">
+        <div>
+            <h2>
+                برنامه امروز
+                <span class="js-jalali-text" data-g-date="{{ target_date|date:'Y-m-d' }}"></span>
+            </h2>
+            <p>کارهای اجباری و اختیاری را منظم کن و فقط با یک کلیک تیک بزن.</p>
+        </div>
+        <form method="get" class="inline-filter">
+            <input type="hidden" name="section" value="tasks" />
+            <label>
+                <span>انتخاب تاریخ</span>
+                <input type="text" class="js-jalali-input" name="date" value="{{ target_date|date:'Y-m-d' }}" autocomplete="off" />
+            </label>
+            <button class="btn secondary" type="submit">نمایش</button>
+        </form>
+    </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span>کارهای انجام‌شده</span>
+            <strong>{{ task_stats.done }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>کارهای باقی‌مانده</span>
+            <strong>{{ task_stats.remaining }}</strong>
+        </div>
+        <div class="stat-card">
+            <span>درصد وزنی تکمیل</span>
+            <strong>{{ task_stats.completion }}%</strong>
+        </div>
+    </div>
+    <div class="task-grid">
+        {% for item in tasks %}
+            <form method="post" class="task-card {% if item.done %}done{% endif %}" data-ajax="true">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle_task" />
+                <input type="hidden" name="status_id" value="{{ item.id }}" />
+                <input type="hidden" name="section" value="tasks" />
+                <div class="task-name">{{ item.task_template.name }}</div>
+                <div class="task-meta">
+                    <span>اهمیت: {{ item.task_template.importance }}</span>
+                    <span>
+                        {% if item.task_template.is_required %}
+                            <span class="badge required">اجباری</span>
+                        {% else %}
+                            <span class="badge optional">اختیاری</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <button class="btn {% if item.done %}secondary{% endif %}" type="submit">
+                    {% if item.done %}بازگرداندن{% else %}انجام شد{% endif %}
+                </button>
+            </form>
+        {% empty %}
+            <div class="empty-state">هیچ کاری برای این تاریخ ثبت نشده است.</div>
+        {% endfor %}
+    </div>
+
+    <div class="panel-split">
+        <div class="mini-panel">
+            <h3>تعریف کار روزانه جدید</h3>
+            <p class="muted">کارهای ویژه را اضافه کن تا همیشه در چک‌لیست روزانه حضور داشته باشند.</p>
+            <form method="post" data-ajax="true">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_task_template" />
+                <input type="hidden" name="section" value="tasks" />
+                {{ template_form.as_p }}
+                <button class="btn" type="submit">افزودن کار</button>
+            </form>
+        </div>
+        <div class="mini-panel">
+            <h3>ریزه‌کاری‌های تکمیل</h3>
+            <div class="window-grid">
+                {% for label, value in completion_windows.items %}
+                    <div class="window-card">
+                        <span>{{ label }}</span>
+                        <strong>{{ value }}%</strong>
+                    </div>
+                {% endfor %}
+            </div>
+            <canvas id="completionChart" class="chart-card" height="160"></canvas>
+            <ul class="tips">
+                <li>هر چه وزن کارها دقیق‌تر باشد، درصد تکمیل واقعی‌تر است.</li>
+                <li>برای روزهای شلوغ می‌توانی کارهای اختیاری را موقتاً غیرفعال کنی.</li>
+            </ul>
+        </div>
+    </div>
+</section>

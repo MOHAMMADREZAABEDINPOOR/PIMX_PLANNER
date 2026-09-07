@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>داشبورد برنامه‌ریزی تحصیلی</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.30.0/dist/date-fns.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/css/persian-datepicker.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/persian-date@1.1.0/dist/persian-date.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/persian-datepicker@1.2.0/dist/js/persian-datepicker.min.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #050814;
+            --panel: #0f172a;
+            --panel-soft: #111b33;
+            --border: #1d2841;
+            --primary: #06b6d4;
+            --primary-soft: #0e7490;
+            --gradient: linear-gradient(135deg, #2563eb, #7c3aed 40%, #db2777);
+            --text: #f9fafb;
+            --muted: #cbd5f5;
+            --danger: #f87171;
+            --success: #34d399;
+            font-family: 'Vazirmatn', system-ui, sans-serif;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top, #172554 0%, #060b1d 45%, #030712 100%);
+            color: var(--text);
+        }
+        a { color: inherit; text-decoration: none; }
+        header.hero {
+            padding: 48px 24px 16px;
+            background: var(--gradient);
+            border-bottom-left-radius: 32px;
+            border-bottom-right-radius: 32px;
+            box-shadow: 0 20px 70px rgb(7 17 41 / 45%);
+        }
+        .hero__content {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 32px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .hero__text h1 {
+            margin: 0 0 8px;
+            font-size: clamp(1.6rem, 3vw, 2.5rem);
+        }
+        .hero__text p {
+            margin: 0;
+            color: rgba(255,255,255,0.85);
+            line-height: 1.7;
+        }
+        .hero__eyebrow {
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.75);
+            margin-bottom: 8px;
+        }
+        .hero__stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            width: 100%;
+        }
+        .hero__stat-card {
+            background: rgba(15, 23, 42, 0.8);
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .hero__stat-card small {
+            display: block;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 6px;
+        }
+        .hero__stat-card strong {
+            font-size: 1.8rem;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .nav-wrapper {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+        .section-nav {
+            margin-top: 16px;
+            background: rgba(15, 23, 42, 0.75);
+            border-radius: 999px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            padding: 6px;
+            gap: 6px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .section-nav a {
+            text-align: center;
+            padding: 12px 0;
+            border-radius: 999px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.7);
+        }
+        .section-nav a.active {
+            background: var(--primary);
+            color: #031225;
+            font-weight: 600;
+        }
+        main.layout {
+            max-width: 1100px;
+            margin: 32px auto 64px;
+            padding: 0 24px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .message-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .message {
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(52, 211, 153, 0.35);
+            background: rgba(15, 118, 110, 0.35);
+            font-size: 0.95rem;
+        }
+        .message--error {
+            border-color: rgba(248, 113, 113, 0.5);
+            background: rgba(127, 29, 29, 0.4);
+        }
+        .panel {
+            background: rgba(11, 17, 33, 0.85);
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            padding: 28px;
+            box-shadow: 0 20px 50px rgba(5, 8, 20, 0.45);
+        }
+        .panel__header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .panel__header h2 {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+        .panel__header p {
+            margin: 4px 0 0;
+            color: var(--muted);
+        }
+        form.inline-filter {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .inline-filter label {
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+        input[type="date"],
+        input[type="number"],
+        input[type="text"],
+        select,
+        textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--text);
+            padding: 10px 12px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+        }
+        textarea { min-height: 90px; }
+        form p {
+            margin: 0 0 12px;
+        }
+        .btn {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            border: none;
+            border-radius: 12px;
+            padding: 10px 18px;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--primary);
+            color: #031225;
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+        .btn.secondary {
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+        }
+        .btn:hover { filter: brightness(1.05); }
+        .btn:active { transform: scale(0.98); }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            padding: 16px;
+            background: var(--panel-soft);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+        }
+        .stat-card span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .stat-card strong {
+            font-size: 1.6rem;
+            display: block;
+            margin-top: 4px;
+        }
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+        }
+        .task-card {
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .task-card.done {
+            border-color: rgba(52, 211, 153, 0.55);
+            background: rgba(13, 148, 136, 0.15);
+        }
+        .task-name {
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+        .task-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+        .badge {
+            display: inline-flex;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+        }
+        .badge.required { background: rgba(248, 113, 113, 0.2); color: #fecaca; }
+        .badge.optional { background: rgba(94, 234, 212, 0.2); color: #99f6e4; }
+        .panel-split {
+            margin-top: 32px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .mini-panel {
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 20px;
+        }
+        .mini-panel h3 {
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+        .muted {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        .window-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        .window-card {
+            background: var(--panel-soft);
+            border-radius: 14px;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+        .window-card strong {
+            display: block;
+            margin-top: 6px;
+            font-size: 1.2rem;
+        }
+        .plan-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+        .plan-card {
+            padding: 18px;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.8);
+        }
+        .plan-card__header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: baseline;
+        }
+        .progress {
+            margin: 14px 0 6px;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .progress span {
+            display: block;
+            height: 100%;
+            background: var(--primary);
+            border-radius: inherit;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            text-align: right;
+        }
+        th { color: var(--muted); font-weight: 600; }
+        .empty-state {
+            padding: 24px;
+            border-radius: 18px;
+            border: 1px dashed var(--border);
+            text-align: center;
+            color: var(--muted);
+        }
+        canvas.chart-card {
+            margin-top: 32px;
+            background: rgba(15, 23, 42, 0.75);
+            border-radius: 24px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+        ul.tips {
+            margin: 16px 0 0;
+            padding-right: 20px;
+            color: var(--muted);
+            line-height: 1.8;
+        }
+        .calendar-panel .panel__header {
+            align-items: flex-start;
+        }
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .calendar-nav__btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.2);
+            cursor: pointer;
+        }
+        .calendar-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 18px;
+        }
+        .calendar-grid {
+            background: rgba(15, 23, 42, 0.75);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 16px;
+        }
+        .calendar-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            color: var(--muted);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .calendar-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+        }
+        .calendar-day {
+            min-height: 78px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 8px;
+            position: relative;
+            font-size: 0.95rem;
+        }
+        .calendar-day.has-events {
+            border-color: var(--primary);
+            background: rgba(6, 182, 212, 0.12);
+        }
+        .calendar-day .event-count {
+            font-size: 0.7rem;
+            color: var(--primary);
+            position: absolute;
+            bottom: 6px;
+            left: 8px;
+        }
+        .calendar-day.is-today {
+            border-color: var(--success);
+        }
+        .calendar-day.muted {
+            opacity: 0.35;
+        }
+        .calendar-events {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .calendar-event-card {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 10px 12px;
+            background: rgba(15, 23, 42, 0.8);
+        }
+        .calendar-event-card strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        .upcoming-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .upcoming-list li {
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.7);
+            font-size: 0.9rem;
+        }
+        .calendar-day-details {
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--primary);
+            background: transparent;
+            color: var(--primary);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .calendar-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .calendar-modal-backdrop.is-open {
+            display: flex;
+        }
+        .calendar-modal {
+            width: min(480px, 90vw);
+            max-height: 80vh;
+            background: var(--panel);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.8);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .calendar-modal__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .calendar-modal__body {
+            overflow-y: auto;
+            max-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        @media (max-width: 900px) {
+            .calendar-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 640px) {
+            header.hero { padding: 32px 16px 12px; }
+            .panel { padding: 20px; }
+            .section-nav { grid-template-columns: repeat(2, minmax(120px, 1fr)); border-radius: 24px; }
+            .calendar-days { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <header class="hero">
+        <div class="hero__content">
+            <div class="hero__text">
+                <div class="hero__eyebrow">برنامه‌ریز روزانه</div>
+                <h1>یک نمای شفاف برای هر کاری که امروز باید انجام دهی</h1>
+                <p>کارها، ویدیوهای مَز، نمرات و رویدادها در چهار صفحه مجزا مدیریت می‌شوند.</p>
+            </div>
+            <div class="hero__stats">
+                <div class="hero__stat-card">
+                    <small>پیشرفت امروز</small>
+                    <strong>{{ task_stats.completion }}%</strong>
+                    <span>{{ task_stats.done }} از {{ task_stats.total }} کار</span>
+                </div>
+                <div class="hero__stat-card">
+                    <small>ویدیوهای برنامه‌ریزی شده</small>
+                    <strong>{{ video_plans|length }}</strong>
+                    <span>درس فعال مَز</span>
+                </div>
+                <div class="hero__stat-card">
+                    <small>آخرین آزمون ثبت شده</small>
+                    {% if latest_assessment %}
+                        <strong>{{ latest_assessment.score }}</strong>
+                        <span>
+                            {{ latest_assessment.get_subject_display }}
+                            -
+                            <span class="js-jalali-text" data-g-date="{{ latest_assessment.exam_date|date:'Y-m-d' }}"></span>
+                        </span>
+                    {% else %}
+                        <strong>--</strong>
+                        <span>هنوز داده‌ای ثبت نشده</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="nav-wrapper">
+            {% with current_date=target_date|date:'Y-m-d' %}
+                <div class="section-nav">
+                    <a href="?section=tasks&date={{ current_date }}" class="{% if active_section == 'tasks' %}active{% endif %}" {% if active_section == 'tasks' %}aria-current="page"{% endif %}>چک‌لیست روزانه</a>
+                    <a href="?section=videos&date={{ current_date }}" class="{% if active_section == 'videos' %}active{% endif %}" {% if active_section == 'videos' %}aria-current="page"{% endif %}>ویدیوهای مَز</a>
+                    <a href="?section=assessments&date={{ current_date }}" class="{% if active_section == 'assessments' %}active{% endif %}" {% if active_section == 'assessments' %}aria-current="page"{% endif %}>نمرات و آزمون‌ها</a>
+                    <a href="?section=calendar&date={{ current_date }}" class="{% if active_section == 'calendar' %}active{% endif %}" {% if active_section == 'calendar' %}aria-current="page"{% endif %}>تقویم</a>
+                </div>
+            {% endwith %}
+        </div>
+    </header>
+
+    <main class="layout">
+        <div class="message-stack" data-message-stack>
+            {% for message in messages %}
+                <div class="message message--{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+
+        {% if active_section == "tasks" %}
+            <div data-section="tasks">
+                {% include "dashboard/_tasks_panel.html" %}
+            </div>
+        {% elif active_section == "videos" %}
+            <div data-section="videos">
+                {% include "dashboard/_videos_panel.html" %}
+            </div>
+        {% elif active_section == "assessments" %}
+            <div data-section="assessments">
+                {% include "dashboard/_assessments_panel.html" %}
+            </div>
+        {% else %}
+            <div data-section="calendar">
+                {% include "dashboard/_calendar_panel.html" %}
+            </div>
+        {% endif %}
+    </main>
+
+    <script>
+        const pad2 = (num) => String(num).padStart(2, "0");
+        const isIsoDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "");
+
+        const isLeapGregorian = (year) => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+
+        const gregorianToJalaliParts = (gy, gm, gd) => {
+            const gDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            gy -= 1600;
+            gm -= 1;
+            gd -= 1;
+
+            let gDayNo = 365 * gy + Math.floor((gy + 3) / 4) - Math.floor((gy + 99) / 100) + Math.floor((gy + 399) / 400);
+            for (let i = 0; i < gm; i += 1) {
+                gDayNo += gDaysInMonth[i];
+            }
+            if (gm > 1 && isLeapGregorian(gy + 1600)) {
+                gDayNo += 1;
+            }
+            gDayNo += gd;
+
+            let jDayNo = gDayNo - 79;
+            const jNp = Math.floor(jDayNo / 12053);
+            jDayNo %= 12053;
+
+            let jy = 979 + 33 * jNp + 4 * Math.floor(jDayNo / 1461);
+            jDayNo %= 1461;
+
+            if (jDayNo >= 366) {
+                jy += Math.floor((jDayNo - 1) / 365);
+                jDayNo = (jDayNo - 1) % 365;
+            }
+
+            const jm = jDayNo < 186 ? 1 + Math.floor(jDayNo / 31) : Math.floor((jDayNo - 186) / 30) + 7;
+            const jd = jDayNo < 186 ? (jDayNo % 31) + 1 : ((jDayNo - 186) % 30) + 1;
+            return [jy, jm, jd];
+        };
+
+        const jalaliToGregorianParts = (jy, jm, jd) => {
+            jy -= 979;
+            let jDayNo = 365 * jy + Math.floor(jy / 33) * 8 + Math.floor(((jy % 33) + 3) / 4);
+            jDayNo += jd - 1;
+            if (jm < 7) {
+                jDayNo += (jm - 1) * 31;
+            } else {
+                jDayNo += ((jm - 7) * 30) + 186;
+            }
+
+            let gDayNo = jDayNo + 79;
+            let gy = 1600 + 400 * Math.floor(gDayNo / 146097);
+            gDayNo %= 146097;
+
+            let leap = true;
+            if (gDayNo >= 36525) {
+                gDayNo -= 1;
+                gy += 100 * Math.floor(gDayNo / 36524);
+                gDayNo %= 36524;
+
+                if (gDayNo >= 365) {
+                    gDayNo += 1;
+                } else {
+                    leap = false;
+                }
+            }
+
+            gy += 4 * Math.floor(gDayNo / 1461);
+            gDayNo %= 1461;
+
+            if (gDayNo >= 366) {
+                leap = false;
+                gDayNo -= 1;
+                gy += Math.floor(gDayNo / 365);
+                gDayNo %= 365;
+            }
+
+            let gd = gDayNo + 1;
+            const gDaysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            let gm = 0;
+            while (gm < 12 && gd > gDaysInMonth[gm]) {
+                gd -= gDaysInMonth[gm];
+                gm += 1;
+            }
+            return [gy, gm + 1, gd];
+        };
+
+        const jalaliMonthLength = (jy, jm) => {
+            const [startGy, startGm, startGd] = jalaliToGregorianParts(jy, jm, 1);
+            const [endGy, endGm, endGd] =
+                jm === 12 ? jalaliToGregorianParts(jy + 1, 1, 1) : jalaliToGregorianParts(jy, jm + 1, 1);
+            const startDate = Date.UTC(startGy, startGm - 1, startGd);
+            const endDate = Date.UTC(endGy, endGm - 1, endGd);
+            return Math.round((endDate - startDate) / 86400000);
+        };
+
+        const gregorianToJalali = (isoDate) => {
+            if (!isIsoDate(isoDate)) return isoDate;
+            const [y, m, d] = isoDate.split("-").map(Number);
+            const [jy, jm, jd] = gregorianToJalaliParts(y, m, d);
+            return `${jy}/${pad2(jm)}/${pad2(jd)}`;
+        };
+
+        const jalaliToGregorian = (jalaliDate) => {
+            if (!jalaliDate) return "";
+            if (isIsoDate(jalaliDate)) return jalaliDate;
+            const cleaned = jalaliDate.replace(/-/g, "/").replace(/[^\d/]/g, "");
+            const parts = cleaned.split("/").filter(Boolean);
+            if (parts.length !== 3) return "";
+            const [jy, jm, jd] = parts.map(Number);
+            if ([jy, jm, jd].some((val) => Number.isNaN(val))) return "";
+            const [gy, gm, gd] = jalaliToGregorianParts(jy, jm, jd);
+            return `${gy}-${pad2(gm)}-${pad2(gd)}`;
+        };
+
+        const initJalaliInputs = () => {
+            const inputs = document.querySelectorAll(".js-jalali-input");
+            inputs.forEach((input) => {
+                if (isIsoDate(input.value)) {
+                    input.value = gregorianToJalali(input.value);
+                }
+
+                if (!input.dataset.datepickerAttached && window.jQuery && window.jQuery.fn && window.jQuery.fn.persianDatepicker) {
+                    window.jQuery(input).persianDatepicker({
+                        format: "YYYY/MM/DD",
+                        autoClose: true,
+                        initialValue: false,
+                        observer: true,
+                        toolbox: { calendarSwitch: { enabled: false } },
+                    });
+                    input.dataset.datepickerAttached = "1";
+                }
+            });
+        };
+
+        const initJalaliTexts = () => {
+            document.querySelectorAll(".js-jalali-text").forEach((node) => {
+                const iso = node.dataset.gDate;
+                if (isIsoDate(iso)) {
+                    node.textContent = gregorianToJalali(iso);
+                }
+            });
+        };
+
+        const messageStack = document.querySelector("[data-message-stack]");
+        const renderMessages = (items = []) => {
+            if (!messageStack) return;
+            messageStack.innerHTML = "";
+            items.forEach(({ level, text }) => {
+                const div = document.createElement("div");
+                div.className = `message message--${level || "info"}`;
+                div.textContent = text;
+                messageStack.appendChild(div);
+            });
+        };
+
+        const submitAjaxForm = (form, event) => {
+            event.preventDefault();
+            const url = form.getAttribute("action") || window.location.href;
+            const method = (form.getAttribute("method") || "post").toUpperCase();
+            const formData = new FormData(form);
+            form.querySelectorAll(".js-jalali-input").forEach((input) => {
+                const greg = jalaliToGregorian(input.value.trim());
+                if (greg) {
+                    formData.set(input.name, greg);
+                }
+            });
+            const submitBtn = form.querySelector("[type='submit']");
+            if (submitBtn) submitBtn.disabled = true;
+            fetch(url, {
+                method,
+                body: formData,
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            })
+                .then(async (response) => {
+                    const data = await response.json();
+                    return { data, ok: response.ok };
+                })
+                .then(({ data }) => {
+                    handleAjaxResponse(data);
+                })
+                .catch((err) => {
+                    console.error(err);
+                    renderMessages([{ level: "error", text: "مشکلی پیش آمد. لطفاً دوباره تلاش کن." }]);
+                })
+                .finally(() => {
+                    if (submitBtn) submitBtn.disabled = false;
+                });
+        };
+
+        const setupAjaxForms = (root = document) => {
+            root.querySelectorAll("form[data-ajax='true']").forEach((form) => {
+                if (form.dataset.ajaxBound === "1") return;
+                form.dataset.ajaxBound = "1";
+                form.addEventListener("submit", (event) => submitAjaxForm(form, event));
+            });
+        };
+
+        const replaceSections = (sections = {}) => {
+            let calendarReplaced = false;
+            Object.entries(sections).forEach(([key, html]) => {
+                const container = document.querySelector(`[data-section="${key}"]`);
+                if (!container) return;
+                container.innerHTML = html;
+                if (key === "calendar") {
+                    calendarReplaced = true;
+                }
+                initJalaliInputs();
+                initJalaliTexts();
+                setupAjaxForms(container);
+            });
+            if (calendarReplaced) {
+                const calendarRoot = document.querySelector("[data-calendar-root]");
+                if (calendarRoot) {
+                    calendarModule.init(calendarRoot);
+                    bindCalendarInteractions(calendarRoot);
+                }
+            }
+        };
+
+        const handleAjaxResponse = (payload) => {
+            if (payload.messages) {
+                renderMessages(payload.messages);
+            }
+            if (payload.sections) {
+                replaceSections(payload.sections);
+                initializeCharts();
+            }
+            if (payload.calendar_refresh && calendarModule.isReady()) {
+                calendarModule.reload();
+            }
+        };
+
+        const palette = [
+            '#f87171', '#fb923c', '#fcd34d', '#4ade80', '#34d399',
+            '#22d3ee', '#60a5fa', '#a78bfa', '#f472b6', '#38bdf8'
+        ];
+        const randomColor = (i) => palette[i % palette.length];
+
+        const buildLineChart = (el, url, extraOptions = {}) => {
+            if (!el) return;
+            fetch(url)
+                .then((r) => r.json())
+                .then((data) => {
+                    const datasets = Object.entries(data.series).map(([label, points], idx) => ({
+                        label,
+                        data: points,
+                        borderColor: randomColor(idx),
+                        backgroundColor: randomColor(idx) + '33',
+                        tension: 0.35,
+                        fill: true,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }));
+                    new Chart(el, {
+                        type: 'line',
+                        data: { datasets },
+                        options: {
+                            interaction: { intersect: false, mode: 'index' },
+                            plugins: { legend: { position: 'bottom' } },
+                            scales: {
+                                x: { type: 'time', time: { unit: 'day' } },
+                            },
+                            ...extraOptions,
+                        },
+                    });
+                });
+        };
+
+        const initializeCharts = () => {
+            buildLineChart(
+                document.getElementById('videoChart'),
+                "{% url 'planner:video_chart_data' %}",
+                { scales: { y: { beginAtZero: true, title: { display: true, text: 'تعداد ویدیو' } } } }
+            );
+
+            buildLineChart(
+                document.getElementById('assessmentChart'),
+                "{% url 'planner:assessment_chart_data' %}",
+                { scales: { y: { suggestedMin: 0, suggestedMax: 20, title: { display: true, text: 'نمره' } } } }
+            );
+
+            buildLineChart(
+                document.getElementById('completionChart'),
+                "{% url 'planner:completion_chart_data' %}",
+                { scales: { y: { suggestedMin: 0, suggestedMax: 100, title: { display: true, text: 'درصد تکمیل' } } } }
+            );
+        };
+
+        /* Legacy calendar implementation (disabled)
+        const calendarModule = (() => {
+            let root = null;
+            let labelEl;
+            let daysEl;
+            let eventsEl;
+            let jy = 0;
+            let jm = 0;
+
+            const formatMonthLabel = () => {
+                const months = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+                return `${months[jm - 1]} ${jy}`;
+            };
+
+            const monthToGregorianKey = () => {
+                const [gy, gm] = jalaliToGregorianParts(jy, jm, 1);
+                return `${gy}-${pad2(gm)}`;
+            };
+
+            const fetchEvents = () =>
+                fetch("{% url 'planner:calendar_events_data' %}?month=" + monthToGregorianKey())
+                    .then((r) => r.json())
+                    .then((data) => data.events || []);
+
+            const render = (events) => {
+                if (!root) return;
+                labelEl.textContent = formatMonthLabel();
+                const [gy, gm, gd] = jalaliToGregorianParts(jy, jm, 1);
+                const firstDate = new Date(Date.UTC(gy, gm - 1, gd));
+                const startOffset = (firstDate.getDay() + 1) % 7;
+                const daysCount = jalaliMonthLength(jy, jm);
+                const now = new Date();
+                const [todayJy, todayJm, todayJd] = gregorianToJalaliParts(
+                    now.getFullYear(),
+                    now.getMonth() + 1,
+                    now.getDate()
+                );
+
+                const eventsByDay = {};
+                events.forEach((event) => {
+                    const [egY, egM, egD] = event.date.split("-").map(Number);
+                    const [eventJy, eventJm, eventJd] = gregorianToJalaliParts(egY, egM, egD);
+                    if (eventJy === jy && eventJm === jm) {
+                        eventsByDay[eventJd] = eventsByDay[eventJd] || [];
+                        eventsByDay[eventJd].push(event);
+                    }
+                });
+
+                const fragments = [];
+                for (let i = 0; i < startOffset; i += 1) {
+                    const div = document.createElement('div');
+                    div.className = 'calendar-day muted';
+                    fragments.push(div);
+                }
+                for (let day = 1; day <= daysCount; day += 1) {
+                    const div = document.createElement('div');
+                    const isToday = todayJy === jy && todayJm === jm && todayJd === day;
+                    div.className = 'calendar-day' + (isToday ? ' is-today' : '');
+                    if (eventsByDay[day]) div.classList.add('has-events');
+                    div.innerHTML = `<strong>${day}</strong>`;
+                    if (eventsByDay[day]) {
+                        div.innerHTML += <span class="event-count"> رویداد</span>;
+                    }
+                    fragments.push(div);
+                }
+                daysEl.innerHTML = '';
+                fragments.forEach((node) => daysEl.appendChild(node));
+
+                const eventsList = Object.keys(eventsByDay)
+                    .sort((a, b) => Number(a) - Number(b))
+                    .map((day) => ({ day, items: eventsByDay[day] }));
+
+                eventsEl.innerHTML = '';
+                if (!eventsList.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'muted';
+                    empty.textContent = 'برای این ماه رویدادی ثبت نشده است.';
+                    eventsEl.appendChild(empty);
+                } else {
+                    eventsList.forEach(({ day, items }) => {
+                        items.forEach((item) => {
+                            const card = document.createElement('div');
+                            card.className = 'calendar-event-card';
+                            const note = item.description ?  ·  : '';
+                            card.innerHTML = <strong></strong><div class="muted">روز </div>;
+                            eventsEl.appendChild(card);
+                        });
+                    });
+                }
+            };
+
+            const changeMonth = (delta) => {
+                jm += delta;
+                if (jm > 12) {
+                    jm = 1;
+                    jy += 1;
+                } else if (jm < 1) {
+                    jm = 12;
+                    jy -= 1;
+                }
+                calendarModule.reload();
+            };
+
+            return {
+                init(rootEl) {
+                    root = rootEl;
+                    if (!root) return;
+                    const initial = root.dataset.initialDate || new Date().toISOString().slice(0, 10);
+                    const [gy, gm, gd] = initial.split('-').map(Number);
+                    const [initJy, initJm] = gregorianToJalaliParts(gy, gm, gd || 1);
+                    jy = initJy;
+                    jm = initJm;
+                    labelEl = root.querySelector('[data-calendar-label]');
+                    daysEl = root.querySelector('[data-calendar-days]');
+                    eventsEl = root.querySelector('[data-calendar-events]');
+                    root.querySelector('[data-calendar-prev]').addEventListener('click', () => changeMonth(-1));
+                    root.querySelector('[data-calendar-next]').addEventListener('click', () => changeMonth(1));
+                    this.reload();
+                },
+                reload() {
+                    if (!root) return;
+                    fetchEvents().then((events) => render(events));
+                },
+                isReady() {
+                    return Boolean(root);
+                },
+            };
+        })();
+        */
+
+        const calendarModule = (() => {
+            let root = null;
+            let labelEl;
+            let daysEl;
+            let eventsEl;
+            let dateInput;
+            let jy = 0;
+            let jm = 0;
+
+            const formatMonthLabel = () => {
+                const months = [
+                    "فروردین",
+                    "اردیبهشت",
+                    "خرداد",
+                    "تیر",
+                    "مرداد",
+                    "شهریور",
+                    "مهر",
+                    "آبان",
+                    "آذر",
+                    "دی",
+                    "بهمن",
+                    "اسفند",
+                ];
+                return `${months[jm - 1]} ${jy}`;
+            };
+
+            const monthToGregorianKey = () => {
+                const [gy, gm] = jalaliToGregorianParts(jy, jm, 1);
+                return `${gy}-${pad2(gm)}`;
+            };
+
+            const fetchEvents = () =>
+                fetch("{% url 'planner:calendar_events_data' %}?month=" + monthToGregorianKey())
+                    .then((r) => r.json())
+                    .then((data) => data.events || []);
+
+            const render = (events) => {
+                if (!root) return;
+                labelEl.textContent = formatMonthLabel();
+                const [gy, gm, gd] = jalaliToGregorianParts(jy, jm, 1);
+                const firstDate = new Date(Date.UTC(gy, gm - 1, gd));
+                const startOffset = (firstDate.getDay() + 1) % 7;
+                const daysCount = jalaliMonthLength(jy, jm);
+                const now = new Date();
+                const [todayJy, todayJm, todayJd] = gregorianToJalaliParts(
+                    now.getFullYear(),
+                    now.getMonth() + 1,
+                    now.getDate()
+                );
+
+                const eventsByDay = {};
+                events.forEach((event) => {
+                    const [egY, egM, egD] = event.date.split("-").map(Number);
+                    const [eventJy, eventJm, eventJd] = gregorianToJalaliParts(egY, egM, egD);
+                    if (eventJy === jy && eventJm === jm) {
+                        eventsByDay[eventJd] = eventsByDay[eventJd] || [];
+                        eventsByDay[eventJd].push(event);
+                    }
+                });
+
+                const fragments = [];
+                for (let i = 0; i < startOffset; i += 1) {
+                    const div = document.createElement("div");
+                    div.className = "calendar-day muted";
+                    fragments.push(div);
+                }
+                for (let day = 1; day <= daysCount; day += 1) {
+                    const div = document.createElement("div");
+                    const isToday = todayJy === jy && todayJm === jm && todayJd === day;
+                    div.className = "calendar-day" + (isToday ? " is-today" : "");
+                    const gDate = new Date(Date.UTC(gy, gm - 1, day)).toISOString().slice(0, 10);
+                    div.dataset.gDate = gDate;
+                    if (eventsByDay[day]) div.classList.add("has-events");
+                    div.innerHTML = `<strong>${day}</strong>`;
+                    if (eventsByDay[day]) {
+                        div.innerHTML += `<span class="event-count">${eventsByDay[day].length} رویداد</span>`;
+                    }
+                    fragments.push(div);
+                }
+                daysEl.innerHTML = "";
+                fragments.forEach((node) => daysEl.appendChild(node));
+
+                const eventsList = Object.keys(eventsByDay)
+                    .sort((a, b) => Number(a) - Number(b))
+                    .map((day) => ({ day, items: eventsByDay[day] }));
+
+                eventsEl.innerHTML = "";
+                if (!eventsList.length) {
+                    const empty = document.createElement("div");
+                    empty.className = "muted";
+                    empty.textContent = "هنوز رویدادی برای این ماه ثبت نشده است.";
+                    eventsEl.appendChild(empty);
+                } else {
+                    eventsList.forEach(({ day, items }) => {
+                        items.forEach((item) => {
+                            const card = document.createElement("div");
+                            card.className = "calendar-event-card";
+                            const note = item.description ? ` – ${item.description}` : "";
+                            card.innerHTML = `<strong>${item.title}</strong><div class="muted">${day} ${formatMonthLabel()}${note}</div>`;
+                            eventsEl.appendChild(card);
+                        });
+                    });
+                }
+            };
+
+            const changeMonth = (delta) => {
+                jm += delta;
+                if (jm > 12) {
+                    jm = 1;
+                    jy += 1;
+                } else if (jm < 1) {
+                    jm = 12;
+                    jy -= 1;
+                }
+                calendarModule.reload();
+            };
+
+            return {
+                init(rootEl) {
+                    root = rootEl;
+                    if (!root) return;
+                    const initial = root.dataset.initialDate || new Date().toISOString().slice(0, 10);
+                    const [gy, gm, gd] = initial.split("-").map(Number);
+                    const [initJy, initJm] = gregorianToJalaliParts(gy, gm, gd || 1);
+                    jy = initJy;
+                    jm = initJm;
+                    labelEl = root.querySelector("[data-calendar-label]");
+                    daysEl = root.querySelector("[data-calendar-days]");
+                    eventsEl = root.querySelector("[data-calendar-events]");
+                    root.querySelector("[data-calendar-prev]").addEventListener("click", () => changeMonth(-1));
+                    root.querySelector("[data-calendar-next]").addEventListener("click", () => changeMonth(1));
+                    this.reload();
+                },
+                reload() {
+                    if (!root) return;
+                    fetchEvents().then((events) => render(events));
+                },
+                isReady() {
+                    return Boolean(root);
+                },
+            };
+        })();
+
+
+        const openDayModal = (gDate) => {
+            const modal = document.querySelector("[data-calendar-modal]");
+            const modalTitle = modal && modal.querySelector("[data-calendar-modal-title]");
+            const modalBody = modal && modal.querySelector("[data-calendar-modal-body]");
+            if (!modal || !modalTitle || !modalBody) return;
+
+            modalTitle.textContent = "";
+            modalBody.innerHTML = "در حال بارگذاری رویدادها...";
+            modal.classList.add("is-open");
+
+            fetch("{% url 'planner:calendar_events_data' %}?day=" + gDate)
+                .then((r) => r.json())
+                .then((data) => {
+                    const events = data.events || [];
+                    modalTitle.textContent = data.day_label || gDate;
+                    if (!events.length) {
+                        modalBody.innerHTML = "<p class=\"muted\">رویدادی برای این روز ثبت نشده است.</p>";
+                        return;
+                    }
+                    const parts = events
+                        .map((ev) => {
+                            const safeTitle = ev.title || "";
+                            const safeDesc = ev.description || "";
+                            return `<div class=\"calendar-event-card\"><strong>${safeTitle}</strong><div class=\"muted\">${safeDesc || "بدون توضیحات"}</div></div>`;
+                        })
+                        .join("");
+                    modalBody.innerHTML = parts;
+                })
+                .catch(() => {
+                    modalBody.innerHTML = "<p class=\"muted\">خطا در دریافت رویدادها.</p>";
+                });
+        };
+
+        const bindCalendarInteractions = (root) => {
+            const daysContainer = root.querySelector("[data-calendar-days]");
+            const eventDateInput = root.querySelector("form[data-ajax='true'] .js-jalali-input");
+            if (!daysContainer) return;
+            daysContainer.addEventListener("click", (event) => {
+                const cell = event.target.closest(".calendar-day");
+                if (!cell || !cell.dataset.gDate) return;
+                const gDate = cell.dataset.gDate;
+                const detailsBtn = event.target.closest(".calendar-day-details");
+                if (detailsBtn) {
+                    openDayModal(gDate);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (eventDateInput) {
+                    eventDateInput.value = gDate;
+                    eventDateInput.focus();
+                }
+            });
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initJalaliInputs();
+            initJalaliTexts();
+            setupAjaxForms();
+            initializeCharts();
+            const calendarRoot = document.querySelector("[data-calendar-root]");
+            if (calendarRoot) {
+                calendarModule.init(calendarRoot);
+                bindCalendarInteractions(calendarRoot);
+            }
+
+            const modal = document.querySelector("[data-calendar-modal]");
+            if (modal) {
+                modal.addEventListener("click", (event) => {
+                    if (
+                        event.target === modal ||
+                        event.target.closest("[data-calendar-modal-close]")
+                    ) {
+                        modal.classList.remove("is-open");
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

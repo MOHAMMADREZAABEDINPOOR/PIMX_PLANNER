@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 140" width="100%" height="100%">
+  <defs>
+    <linearGradient id="plFBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#050814" /><stop offset="50%" stop-color="#0c132c" /><stop offset="100%" stop-color="#050814" />
+    </linearGradient>
+    <linearGradient id="plFNeon" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" /><stop offset="50%" stop-color="#818cf8" /><stop offset="100%" stop-color="#c084fc" />
+    </linearGradient>
+    <filter id="plFGlow"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+  </defs>
+  <rect width="1200" height="140" fill="url(#plFBg)" />
+  <line x1="0" y1="2" x2="1200" y2="2" stroke="url(#plFNeon)" stroke-width="3" filter="url(#plFGlow)" />
+  <text x="600" y="55" font-family="'Segoe UI', sans-serif" font-size="20" font-weight="900" fill="url(#plFNeon)" text-anchor="middle" letter-spacing="3" filter="url(#plFGlow)">
+    PIMX_PLANNER // COGNITIVE ACCELERATION &amp; DEEP WORK
+  </text>
+  <text x="600" y="85" font-family="'Fira Code', monospace" font-size="13" font-weight="500" fill="#94a3b8" text-anchor="middle">
+    Architected &amp; Vibe Coded with high-leverage AI choreography by MOHAMMADREZA ABEDINPOOR
+  </text>
+  <text x="600" y="112" font-family="'Fira Code', monospace" font-size="11" font-weight="bold" fill="#38bdf8" text-anchor="middle" opacity="0.8">
+    ★ STAR THIS REPOSITORY ON GITHUB IF IT ACCELERATES YOUR LEARNING JOURNEY ★
+  </text>
+</svg>

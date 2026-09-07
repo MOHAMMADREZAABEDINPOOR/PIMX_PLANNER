@@ -1,0 +1,68 @@
+<section class="panel stack calendar-panel" data-calendar-root data-initial-date="{{ calendar_focus_date|date:'Y-m-d' }}">
+    <div class="panel__header">
+        <div>
+            <h2>تقویم برنامه‌ها</h2>
+            <p>تمام رویدادها و برنامه‌های مهم را در یک نگاه ثبت و مرور کن.</p>
+        </div>
+        <div class="calendar-nav">
+            <button type="button" class="calendar-nav__btn" data-calendar-prev aria-label="ماه قبل">‹</button>
+            <strong data-calendar-label>...</strong>
+            <button type="button" class="calendar-nav__btn" data-calendar-next aria-label="ماه بعد">›</button>
+        </div>
+    </div>
+    <div class="calendar-layout">
+        <div class="calendar-grid">
+            <div class="calendar-weekdays">
+                <span>شنبه</span>
+                <span>یکشنبه</span>
+                <span>دوشنبه</span>
+                <span>سه‌شنبه</span>
+                <span>چهارشنبه</span>
+                <span>پنجشنبه</span>
+                <span>جمعه</span>
+            </div>
+            <div class="calendar-days" data-calendar-days></div>
+        </div>
+        <div class="calendar-sidebar">
+            <div class="mini-panel">
+                <h3>رویدادهای این ماه</h3>
+                <div class="calendar-events" data-calendar-events></div>
+            </div>
+            <div class="mini-panel">
+                <h3>افزودن رویداد</h3>
+                <form method="post" data-ajax="true">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_event" />
+                    <input type="hidden" name="section" value="calendar" />
+                    {{ event_form.as_p }}
+                    <button class="btn" type="submit">ذخیره رویداد</button>
+                </form>
+            </div>
+            <div class="mini-panel">
+                <h3>رویدادهای آینده</h3>
+                <ul class="upcoming-list">
+                    {% for event in upcoming_events %}
+                        <li>
+                            <strong>{{ event.title }}</strong>
+                            <div class="muted">
+                                <span class="js-jalali-text" data-g-date="{{ event.date|date:'Y-m-d' }}"></span>
+                                {% if event.description %} · {{ event.description }}{% endif %}
+                            </div>
+                        </li>
+                    {% empty %}
+                        <li class="muted">رویدادی برای نمایش وجود ندارد.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+<div class="calendar-modal-backdrop" data-calendar-modal>
+    <div class="calendar-modal">
+        <div class="calendar-modal__header">
+            <strong data-calendar-modal-title></strong>
+            <button type="button" class="btn secondary" data-calendar-modal-close>بستن</button>
+        </div>
+        <div class="calendar-modal__body" data-calendar-modal-body></div>
+    </div>
+</div>

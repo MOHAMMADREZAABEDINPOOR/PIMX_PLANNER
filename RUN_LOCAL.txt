@@ -1,0 +1,51 @@
+Local run (API + frontend)
+---------------------------
+Prereqs: Postgres running (connection: postgres://postgres:12345678fgh@localhost:3000/planner), Node/npm installed.
+
+1) API (in a CMD window, keep it open)
+cd /d "F:\planner"
+set PG_CONNECTION_STRING=postgres://postgres:12345678fgh@localhost:3000/planner
+set PORT=4000
+npm run api
+
+2) Frontend (new CMD window)
+cd /d "F:\planner"
+set VITE_API_BASE_URL=http://localhost:4000/api
+==================================================
+نحوه اجرای کامل پروژه (لوکال)
+==================================================
+
+1) ترمینال (CMD) را در پوشه پروژه باز کن:
+cd /d "F:\planner"
+
+2) استارت دیتابیس کلاستر پروژه (پورت 5433):
+   "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" -D "F:\planner\db-data" -o "-p 5433" start
+
+3) ترمینال 1 (پوشه پروژه): API
+   npm run api
+
+4) ترمینال 2 (پوشه پروژه): فرانت
+   npm run dev
+   (اگر پورت 3000 درگیر بود، Vite روی 3001 می‌آید)
+
+نکته: قبل از اجرای npm، مطمئن شو پله 2 انجام شده و Postgres روی 5433 بالا است (تست سریع):
+   "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -p 5433 -U postgres -d planner -c "select 1;"
+
+دستور پاک کردن صفحه در CMD:
+   cls
+
+باز کردن دو CMD جدید از یک CMD (در پوشه پروژه):
+   start cmd /k "cd /d F:\planner"
+   start cmd /k "cd /d F:\planner"
+
+مسیر دیتابیس پروژه:
+   F:\code\New folder (5)\db-data
+فایل‌ها و داده‌های Postgres در همین پوشه نگه‌داری می‌شوند.
+
+3) Test
+Open the URL that Vite prints (e.g., http://localhost:3000 or 3001). Data should persist in Postgres.
+
+Notes about the database
+- This project uses Postgres; data is not a single file. It is stored in PostgreSQL’s data directory (e.g., on Windows: C:\Program Files\PostgreSQL\18\data unless you installed elsewhere).
+- If the database “planner” doesn’t exist, create it once via:
+  "%ProgramFiles%\PostgreSQL\18\bin\psql.exe" -U postgres -p 3000 -d postgres -c "CREATE DATABASE planner;"

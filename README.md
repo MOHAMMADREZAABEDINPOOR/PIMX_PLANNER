@@ -25,7 +25,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Django Backend](https://img.shields.io/badge/Backend-Django_5.x-092E20?style=for-the-badge&logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Cloudflare Edge](https://img.shields.io/badge/Edge-Cloudflare_Pages_Functions-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](https://developers.cloudflare.com/pages/)
-[![Read in Persian](https://img.shields.io/badge/مطالعه_به_فارسی-Persian_README-008080?style=for-the-badge)](#-بخش-فوقالعاده-مفصل-و-جامع-به-زبان-فارسی-persian-documentation)
+[![Read in Persian](https://img.shields.io/badge/مطالعه_به_فارسی-Persian_README-008080?style=for-the-badge)](#persian-documentation)
 
 <p align="center">
   <b>PIMX_PLANNER</b> is an enterprise-grade cognitive productivity workstation and academic operating system designed for researchers, STEM students, polymaths, and elite software engineers. By uniting Cirillo cognitive timeboxing, mathematical spaced-repetition flashcards (SM-2 / Leitner), academic forecast simulators, and Google Gemini Pro generative artificial intelligence into a zero-latency dark glassmorphic dashboard, PIMX_PLANNER eliminates mental fragmentation and supercharges human potential.
@@ -42,7 +42,7 @@
 [Installation Guide](#-step-by-step-installation--local-setup) •
 [Environment Variables](#-configuration--environment-variables) •
 [Deployment](#-multi-cloud-deployment-blueprints) •
-[توضیحات فارسی](#-بخش-فوقالعاده-مفصل-و-جامع-به-زبان-فارسی-persian-documentation) •
+[توضیحات فارسی](#persian-documentation) •
 [Roadmap](#-strategic-engineering-roadmap) •
 [License](#-copyleft-license--legal-attribution)
 
@@ -334,7 +334,8 @@ node server/index.cjs
 
 ---
 
-## 🇮🇷 بخش فوق‌العاده مفصل و جامع به زبان فارسی (Persian Documentation)
+## Persian Documentation
+### 🇮🇷 مستندات فوق‌العاده مفصل، جامع و فنی به زبان فارسی
 
 ### ۱. مقدمه، چرایی و فلسفه خلق PIMX_PLANNER
 پروژه **PIMX_PLANNER** یک سیستم‌عامل جامع بهره‌وری فردی، مدیریت یادگیری عمیق، برنامه‌ریزی تحصیلی و تکامل عادات روزمره است که بر پایه اصول روانشناسی شناختی و جدیدترین تکنولوژی‌های توسعه نرم‌افزار طراحی شده است.
@@ -419,7 +420,7 @@ Under this copyleft covenant, any derivative software, hosted web application, o
 <!-- ============================================================================== -->
 <!-- ANIMATED CAPSULE FOOTER                                                        -->
 <!-- ============================================================================== -->
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=1,12,24,30&height=120&section=footer" alt="Footer" width="100%" />
+<img src="./assets/footer.svg" alt="PIMX_PLANNER 3D Footer" width="100%" />
 
 <sub>Architected with dedication and passion by <a href="https://github.com/MOHAMMADREZAABEDINPOOR"><b>MOHAMMADREZA ABEDINPOOR</b></a>. If PIMX_PLANNER empowers your cognitive journey, consider giving this repository a ⭐!</sub>
 
