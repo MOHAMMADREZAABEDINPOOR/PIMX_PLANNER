@@ -1,27 +1,41 @@
 <div align="center">
 
-<img src="assets/readme/hero.gif" width="1200" alt="PIMX PLANNER — rotating 3D geometry" />
+<img src="assets/readme/hero.gif" width="1200" alt="PIMX PLANNER: a calendar with checked tasks and growing goals" />
 
 **[English](README.md) · [فارسی](README.fa.md)**
 
-<img src="assets/readme/identity.svg" width="1200" alt="web / English and Persian documentation" />
-
 </div>
 
-# PIMX PLANNER
+# 🗓️ PIMX PLANNER
 
 A personal planning workspace with daily tasks, goals, study tracking, grades, reminders, a diary and a chat section. The repository contains React, Node/PostgreSQL, Django and Pages/D1 variants.
 
 [GitHub](https://github.com/MOHAMMADREZAABEDINPOOR/PIMX_PLANNER) · [PIMX / Profile](https://github.com/MOHAMMADREZAABEDINPOOR) · [Static artwork](assets/readme/hero.png)
 
-## Features
+| At a glance | Details |
+|:---|:---|
+| 🗓️ Experience | Web application / browser experience |
+| 🧰 Built with | `React` · `Vite` · `TypeScript` · `Express` |
+| 🌐 Documentation | [English](README.md) · [فارسی](README.fa.md) |
 
-- Daily planner, calendar, goals and progress views
-- Study sections, English practice and grade tracking
-- Diary, reminders and assistant interface
-- Alternative API/storage implementations
+[✨ Features](#features) · [🚀 Getting started](#getting-started) · [⚙️ Configuration](#configuration) · [🌍 Deployment](#deployment)
 
-## Stack
+---
+
+<a id="features"></a>
+
+## ✨ Features
+
+| Area | Included capability |
+|:---|:---|
+| 🗓️ Planning | Daily planner, calendar, goals and progress views |
+| 🌐 Experience | Study sections, English practice and grade tracking |
+| 🗓️ Planning | Diary, reminders and assistant interface |
+| 🗄️ Data | Alternative API/storage implementations |
+
+<a id="stack"></a>
+
+## 🧰 Stack
 
 | Tool | Version / source |
 |---|---|
@@ -30,7 +44,9 @@ A personal planning workspace with daily tasks, goals, study tracking, grades, r
 | TypeScript | `~5.8.2` |
 | Express | `^4.22.1` |
 
-## Getting started
+<a id="getting-started"></a>
+
+## 🚀 Getting started
 
 Node.js 22.12+ and the package manager declared in package.json. Install dependencies from the checked-in lockfile where available.
 
@@ -42,7 +58,9 @@ npm ci
 npm run dev
 ```
 
-## Configuration
+<a id="configuration"></a>
+
+## ⚙️ Configuration
 
 These names are found in the example configuration or source; not all are required. Check their defaults/usage in those files and supply secrets only in your local or hosting environment.
 
@@ -57,11 +75,15 @@ These names are found in the example configuration or source; not all are requir
 
 Hosting bindings: `DB`.
 
-## Usage
+<a id="usage"></a>
+
+## 🎯 Usage
 
 Run `npm run dev` for the interface. For persistent state choose one backend and configure the API URL. Read server/index.cjs for the Node/PostgreSQL path and functions/api/state.ts for Pages/D1.
 
-## Project structure
+<a id="project-structure"></a>
+
+## 🗂️ Project structure
 
 | Path | Role |
 |---|---|
@@ -78,7 +100,16 @@ Run `npm run dev` for the interface. For persistent state choose one backend and
 | [`tsconfig.json`](tsconfig.json) | Project entry/configuration file |
 | [`wrangler.toml`](wrangler.toml) | Project entry/configuration file |
 
-## Commands and checks
+<a id="commands-and-checks"></a>
+
+## 🧪 Commands and checks
+
+| Command | Purpose |
+|:---|:---|
+| `npm run dev` | 🧑‍💻 Development server |
+| `npm run build` | 📦 Production build |
+| `npm run preview` | 👀 Preview a build |
+| `npm run start` | ▶️ Application server |
 
 ```bash
 npm run dev
@@ -89,28 +120,46 @@ npm run start
 
 These commands are declared in package.json; the list is not a test execution report. Test commands may need a browser, service or prepared database.
 
-## Deployment
+<a id="deployment"></a>
+
+## 🌍 Deployment
 
 Deploy the build according to its architecture: server-backed projects need a Node process; static Vite frontends can host dist. Pages functions, KV or D1 require separate configuration.
 
-## Limitations
+<a id="limitations"></a>
+
+## 📌 Limitations
 
 The bundled npm `api` script contains development-only database connection settings; replace them for your environment. The frontend alone does not validate or deploy every backend variant.
 
-## Troubleshooting
+<a id="troubleshooting"></a>
+
+## 🛠️ Troubleshooting
 
 - Missing packages: install dependencies using the project’s package manager.
 - API/network failure: check the configured origin, provider and hosting bindings.
 - Old assets: rebuild when a build script exists, then clear the browser cache.
 
-## Contributing
+<a id="contributing"></a>
+
+## 🤝 Contributing
 
 Create a focused branch, verify the affected behavior and explain the change clearly. Keep private data, build outputs and local databases out of commits.
 
-## License
+<a id="license"></a>
+
+## 📄 License
 
 No repository-level license file is included in this snapshot. Public visibility alone does not grant reuse rights; contact the repository owner for terms.
 
 ---
 
 Part of **PIMX** · Documentation in English and Persian.
+
+---
+
+<div align="center">
+
+🗓️ **PIMX PLANNER** · [English](README.md) · [فارسی](README.fa.md)
+
+</div>
